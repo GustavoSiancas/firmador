@@ -1,0 +1,194 @@
+# =========================
+# .NET / Visual Studio
+# =========================
+
+# Build
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Publish
+publish/
+**/publish/
+
+# Visual Studio
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+
+# =========================
+# NuGet
+# =========================
+
+*.nupkg
+*.snupkg
+packages/
+
+# No ignorar packages.config si existiera
+!packages.config
+
+# =========================
+# Logs
+# =========================
+
+*.log
+logs/
+Logs/
+
+# =========================
+# Archivos temporales
+# =========================
+
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.swp
+*.swo
+~$*
+
+temp/
+tmp/
+
+# =========================
+# PDFs temporales / firmados
+# =========================
+
+*.signed.pdf
+*_signed.pdf
+*_temp.pdf
+*_prepared.pdf
+
+temp-*.pdf
+signed-*.pdf
+
+# Si tienes una carpeta temporal propia
+temp-pdf/
+signed-pdf/
+
+# =========================
+# Certificados / claves
+# NUNCA subirlos a GitHub
+# =========================
+
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.der
+
+certificates/
+certs/
+keys/
+secrets/
+
+# =========================
+# Configuración sensible
+# =========================
+
+.env
+.env.*
+!.env.example
+
+appsettings.Development.json
+appsettings.Local.json
+appsettings.local.json
+secrets.json
+
+# Tokens / archivos locales
+*.token
+*.secret
+
+# =========================
+# Windows
+# =========================
+
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# =========================
+# macOS
+# =========================
+
+.DS_Store
+
+# =========================
+# Test results
+# =========================
+
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# =========================
+# Code coverage
+# =========================
+
+coverage/
+coverage.*
+*.coverlet.json
+
+# =========================
+# Benchmark
+# =========================
+
+BenchmarkDotNet.Artifacts/
+
+# =========================
+# WebView2
+# =========================
+
+# Datos/cache generados por WebView2
+EBWebView/
+**/EBWebView/
+
+# =========================
+# Inno Setup / instaladores
+# =========================
+
+# Instaladores generados
+Output/
+Installer/Output/
+installer/Output/
+
+*.exe
+*.msi
+
+# OJO:
+# Si necesitas versionar algún .exe concreto,
+# agrégalo con !ruta/al/archivo.exe
+
+# =========================
+# Archivos locales del proyecto
+# =========================
+
+*.local
+local/
+Local/
+
+# =========================
+# Resharper
+# =========================
+
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
