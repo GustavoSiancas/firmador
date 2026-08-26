@@ -22,6 +22,8 @@ public partial class CertificateForm : Form
 
     private readonly List<CertificateItem> _items = new();
 
+    public byte[]? SignedPdfBytes { get; private set; }
+
     public CertificateForm(
         CertificateService certificateService,
         OrchestratorService orchestratorService,
@@ -194,11 +196,14 @@ public partial class CertificateForm : Form
                     item.Certificate,
                     _placement);
 
+            SignedPdfBytes = signedPdf;
+
             using var signedForm =
                 new SignedPdfForm(signedPdf, _downloadService);
 
             signedForm.ShowDialog(this);
-            Application.Exit();
+            DialogResult = DialogResult.OK;
+            Close();
         }
         catch (Exception ex)
         {

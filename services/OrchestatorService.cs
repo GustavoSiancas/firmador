@@ -6,18 +6,15 @@ namespace FirmadorPades.Services;
 public class OrchestratorService
 {
     private readonly StampService _stampService;
-    private readonly PdfPreparationService _pdfPreparationService;
     private readonly PdfSignatureService _pdfSignatureService;
     private readonly ApiService _apiService;
 
     public OrchestratorService(
         StampService stampService,
-        PdfPreparationService pdfPreparationService,
         PdfSignatureService pdfSignatureService,
         ApiService apiService)
     {
         _stampService = stampService;
-        _pdfPreparationService = pdfPreparationService;
         _pdfSignatureService = pdfSignatureService;
         _apiService = apiService;
     }
@@ -34,20 +31,17 @@ public class OrchestratorService
             certificate.Subject,
             reason);
 
-        // 2. Insertar sello al PDF
-        byte[] pdfWithStamp = _pdfPreparationService.InsertStamp(
+        // El sello es la apariencia del campo. SignDetached crea la firma
+        // criptográfica y ambos se agregan en una única revisión incremental.
+        byte[] signedPdf = _pdfSignatureService.Sign(
             documentMemory,
+            reason,
+            certificate,
             stamp,
             placement);
 
-        // 3. Firmar PDF
-        byte[] signedPdf = _pdfSignatureService.Sign(
-            pdfWithStamp,
-            reason,
-            certificate);
-
-        // 4. Subir PDF firmado
-        await _apiService.UpdateDocumentAsync(signedPdf, documentId);
+        // 3. Subir PDF firmado
+        await _apiService.UpdateDocumentAsync(signedPdf);
 
         return signedPdf;
     }

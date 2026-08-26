@@ -195,26 +195,14 @@ public partial class UploadPdfForm : Form
             DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Color.Black, Font = new Font("Segoe UI", 9), SelectionBackColor = Color.Gainsboro, SelectionForeColor = Color.Black }
         };
 
-        dgv.Columns.Add(
-            new DataGridViewTextBoxColumn
-            {
-                HeaderText = "Firmante",
-                Width = 180
-            });
-
-        dgv.Columns.Add(
-            new DataGridViewTextBoxColumn
-            {
-                HeaderText = "Estado",
-                Width = 80
-            });
-
-        dgv.Columns.Add(
-            new DataGridViewTextBoxColumn
-            {
-                HeaderText = "Fecha",
-                Width = 110
-            });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Campo", Width = 110 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Firmante", Width = 170 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Subject", Width = 240 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Integridad", Width = 80 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Revisión", Width = 70 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Cubre final", Width = 80 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Algoritmo", Width = 100 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Fecha", Width = 120 });
 
         btnUpload = new Button
         {
@@ -357,7 +345,12 @@ public partial class UploadPdfForm : Form
         if (!signatures.Any())
         {
             dgv.Rows.Add(
+                "-",
                 "El documento no contiene firmas",
+                "-",
+                "-",
+                "-",
+                "-",
                 "-",
                 "-");
 
@@ -368,8 +361,13 @@ public partial class UploadPdfForm : Form
         foreach (var s in signatures)
         {
             dgv.Rows.Add(
+                s.SignatureName,
                 s.Signer,
-                s.IsValid ? "✔ Válida" : "❌ Inválida",
+                s.Subject,
+                s.IsValid ? "Válida" : "Inválida",
+                $"{s.Revision}/{s.TotalRevisions}",
+                s.CoversWholeDocument ? "Sí" : "No",
+                s.Algorithm,
                 s.SigningDate?.ToString("dd/MM/yyyy HH:mm"));
         }
 
@@ -412,9 +410,7 @@ public partial class UploadPdfForm : Form
             btnUpload.Enabled = false;
             btnChangePdf.Enabled = false;
 
-            await _apiService.UpdateDocumentAsync(
-                _pdfBytes,
-                _documentId);
+            await _apiService.UpdateDocumentAsync(_pdfBytes);
 
             using var preview = new SignedPdfForm(_pdfBytes, _downloadService);
 

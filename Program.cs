@@ -22,8 +22,9 @@ internal static class Program
             var certificateService = new CertificateService();
 
             var apiService = new ApiService(
-                parameters.Backend,
-                parameters.DocumentArtifactId,
+                parameters.InputEndpoint,
+                parameters.OutputEndpoint,
+                parameters.FileId,
                 parameters.Token);
 
             var cloudinaryService =
@@ -35,16 +36,12 @@ internal static class Program
             var downloadService =
                 new DownloadService();
 
-            var pdfPreparationService =
-                new PdfPreparationService();
-
             var pdfSignatureService =
                 new PdfSignatureService();
 
             var orchestratorService =
                 new OrchestratorService(
                     stampService,
-                    pdfPreparationService,
                     pdfSignatureService,
                     apiService);
 
@@ -55,7 +52,7 @@ internal static class Program
 
             Application.Run(
                 new MainForm(
-                    parameters.DocumentArtifactId,
+                    parameters.FileId,
                     apiService,
                     pdfBytes,
                     certificateService,

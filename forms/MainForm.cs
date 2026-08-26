@@ -9,7 +9,7 @@ namespace FirmadorPades.Forms;
 public partial class MainForm : Form
 {
     private readonly string _documentId;
-    private readonly byte[] _pdfBytes;
+    private byte[] _currentPdfBytes;
     private readonly ApiService _apiService;
     private readonly DownloadService _downloadService;
 
@@ -37,7 +37,7 @@ public partial class MainForm : Form
         DownloadService downloadService)
     {
         _documentId = documentId;
-        _pdfBytes = pdfBytes;
+        _currentPdfBytes = pdfBytes;
         _apiService = apiService;
 
         _certificateService = certificateService;
@@ -182,7 +182,7 @@ public partial class MainForm : Form
 
             await File.WriteAllBytesAsync(
                 _tempPdfFile,
-                _pdfBytes);
+                _currentPdfBytes);
 
             webViewPdf.Source = new Uri(_tempPdfFile);
         }
@@ -196,7 +196,7 @@ public partial class MainForm : Form
         }
     }
 
-    private void BtnSign_Click(
+    private async void BtnSign_Click(
         object? sender,
         EventArgs e)
     {
@@ -205,7 +205,7 @@ public partial class MainForm : Form
             return;
 
         using var preview = new SignaturePreviewForm(
-            _pdfBytes,
+            _currentPdfBytes,
             _stampService.CreatePreviewStamp(),
             startInSelectionMode: !useDefault.Value);
         if (preview.ShowDialog(this) != DialogResult.OK || preview.SignatureLocation is null)
@@ -215,15 +215,35 @@ public partial class MainForm : Form
             _certificateService,
             _orchestratorService,
             _documentId,
-            _pdfBytes,
+            _currentPdfBytes,
             preview.SignatureLocation,
             _downloadService);
 
         form.ShowDialog(this);
 
+        if (form.SignedPdfBytes is not null)
+        {
+            _currentPdfBytes = form.SignedPdfBytes;
+            await ShowCurrentPdfAsync();
+        }
+
         // Cuando la firma termine correctamente,
         // simplemente habilitamos el botón.
         btnUpload.Enabled = true;
+    }
+
+    private async Task ShowCurrentPdfAsync()
+    {
+        string newTempPdf = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.pdf");
+        await File.WriteAllBytesAsync(newTempPdf, _currentPdfBytes);
+        string? previousTempPdf = _tempPdfFile;
+        _tempPdfFile = newTempPdf;
+        webViewPdf.Source = new Uri(newTempPdf);
+
+        if (!string.IsNullOrWhiteSpace(previousTempPdf) && File.Exists(previousTempPdf))
+        {
+            try { File.Delete(previousTempPdf); } catch { }
+        }
     }
 
     private async void BtnDownload_Click(
@@ -233,7 +253,7 @@ public partial class MainForm : Form
         try
         {
             btnDownload.Enabled = false;
-            await _downloadService.DownloadPdfAsync(_pdfBytes);
+            await _downloadService.DownloadPdfAsync(_currentPdfBytes);
         }
         catch (Exception ex)
         {

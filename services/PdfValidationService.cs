@@ -18,8 +18,11 @@ public class PdfValidationService
 
         var signatures = util.GetSignatureNames();
 
-        foreach (string signatureName in signatures)
+        int totalRevisions = signatures.Count;
+
+        for (int index = 0; index < signatures.Count; index++)
         {
+            string signatureName = signatures[index];
             PdfPKCS7 pkcs7 = util.ReadSignatureData(signatureName);
 
             bool valid = pkcs7.VerifySignatureIntegrityAndAuthenticity();
@@ -35,11 +38,23 @@ public class PdfValidationService
                     X509NameType.SimpleName,
                     false),
 
+                Subject = cert.Subject,
+
                 Issuer = cert.Issuer,
 
                 SigningDate = pkcs7.GetSignDate().ToUniversalTime(),
 
                 IsValid = valid,
+
+                // iText 7.2.5 no expone GetRevision/GetTotalRevisions. La lista
+                // de SignatureUtil está ordenada por revisión de firma.
+                Revision = index + 1,
+
+                TotalRevisions = totalRevisions,
+
+                CoversWholeDocument = util.SignatureCoversWholeDocument(signatureName),
+
+                Algorithm = pkcs7.GetDigestAlgorithm(),
 
                 Certificate = cert
             });

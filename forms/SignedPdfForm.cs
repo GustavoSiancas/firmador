@@ -178,7 +178,5 @@ public class SignedPdfForm : Form
         catch
         {
         }
-
-        Application.Exit();
     }
 }

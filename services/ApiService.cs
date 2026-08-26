@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using FirmadorPades.Models;
 
@@ -7,72 +6,50 @@ namespace FirmadorPades.Services;
 
 public class ApiService
 {
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _apiClient;
+    private readonly Uri _inputEndpoint;
+    private readonly Uri _outputEndpoint;
 
-    private readonly string _baseUrl;
+    private readonly string _fileId;
 
-    private readonly string _documentId;
-
-    private readonly string _token;
-
-    public ApiService(string baseUrl, string documentId, string token)
+    public ApiService(
+        Uri inputEndpoint,
+        Uri outputEndpoint,
+        string fileId,
+        string token)
     {
-        _httpClient = new HttpClient();
+        _apiClient = new HttpClient();
+        _inputEndpoint = inputEndpoint;
+        _outputEndpoint = outputEndpoint;
+        _fileId = fileId;
 
-        _baseUrl = baseUrl.TrimEnd('/');
-
-        _token = token;
-
-        _httpClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue(
-                "Bearer", token);
-
-        _documentId = documentId;
+        _apiClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
     }
 
-    // obtengo un pdf en bytes
+    // El endpoint de entrada devuelve directamente el PDF en binario.
     public async Task<byte[]> GetDocumentPdfAsync()
     {
-
-        var url = $"{_baseUrl}/documents/get-document-artifact-original/{_documentId}";
-
-        var response = await _httpClient.GetAsync(url);
+        Uri requestUri = AppendPathSegment(_inputEndpoint, _fileId);
+        var response = await _apiClient.GetAsync(requestUri);
 
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync();
+            string responseBody = await response.Content.ReadAsStringAsync();
             throw new Exception(GetBackendErrorMessage(responseBody, response));
         }
 
         return await response.Content.ReadAsByteArrayAsync();
     }
 
-    // fix
-    public async Task<UpdateDocumentResponse> UpdateDocumentAsync(
-        byte[] pdfBytes,
-        string documentId)
+    public async Task<UpdateDocumentResponse> UpdateDocumentAsync(byte[] pdfBytes)
     {
-        using var content = new MultipartFormDataContent();
-
-        // documentArtifactId
-        content.Add(
-            new StringContent(documentId),
-            "documentArtifactId");
-
-        // archivo
-        var pdfContent = new ByteArrayContent(pdfBytes);
-
-        pdfContent.Headers.ContentType =
+        using var content = new ByteArrayContent(pdfBytes);
+        content.Headers.ContentType =
             new MediaTypeHeaderValue("application/pdf");
 
-        content.Add(
-            pdfContent,
-            "file",
-            "signed.pdf");
-
-        var response = await _httpClient.PostAsync(
-            $"{_baseUrl}/documents/upload-document-artifact-version-signed",
-            content);
+        Uri requestUri = AppendPathSegment(_outputEndpoint, _fileId);
+        var response = await _apiClient.PostAsync(requestUri, content);
 
         var responseBody = await response.Content.ReadAsStringAsync();
 
@@ -134,5 +111,15 @@ public class ApiService
         }
 
         return $"Error {(int)response.StatusCode}: {response.ReasonPhrase}";
+    }
+
+    private static Uri AppendPathSegment(Uri endpoint, string value)
+    {
+        var builder = new UriBuilder(endpoint)
+        {
+            Path = $"{endpoint.AbsolutePath.TrimEnd('/')}/{Uri.EscapeDataString(value)}"
+        };
+
+        return builder.Uri;
     }
 }

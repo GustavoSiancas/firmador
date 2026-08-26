@@ -1,9 +1,11 @@
 namespace FirmadorPades.Models;
 public class LaunchParameters
 {
-    public string Backend { get; set; } = string.Empty;
+    public Uri InputEndpoint { get; set; } = null!;
 
-    public string DocumentArtifactId { get; set; } = string.Empty;
+    public Uri OutputEndpoint { get; set; } = null!;
+
+    public string FileId { get; set; } = string.Empty;
 
     public string Token { get; set; } = string.Empty;
 }

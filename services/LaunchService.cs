@@ -7,19 +7,6 @@ public class LaunchService
 {
     public LaunchParameters GetLaunchParameters(string[] args)
     {
-#if DEBUG
-        // Modo desarrollo
-        if (args.Length == 0)
-        {
-            return new LaunchParameters
-            {   
-                Backend = "https://backend.cal.org.pe/servicios-cal-dev",
-                DocumentArtifactId = "48a69b61-5879-40c8-81c2-5126dec00584",
-                Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIxLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODU3Njc4ODMsImV4cCI6MTc4NjM3MjY4M30.PTI8y8dUztrp8U1l0hQPMkTpV9NYkYSKQ3f9v4JtdzU"
-            };
-        }
-#endif
-
         // La aplicación solo puede iniciarse mediante el protocolo firmaapp://
         if (args.Length != 1)
         {
@@ -35,15 +22,15 @@ public class LaunchService
 
         var query = HttpUtility.ParseQueryString(uri.Query);
 
-        string backend = query["backend"]
-            ?? throw new Exception("No se recibió el parámetro backend.");
+        Uri inputEndpoint = GetEndpoint(query["inputEndpoint"], "inputEndpoint");
+        Uri outputEndpoint = GetEndpoint(query["outputEndpoint"], "outputEndpoint");
 
-        string documentArtifactId = query["documentArtifactId"]
-            ?? throw new Exception("No se recibió el parámetro documentArtifactId.");
+        string fileId = query["fileId"]
+            ?? throw new Exception("No se recibió el parámetro fileId.");
 
-        if (string.IsNullOrWhiteSpace(documentArtifactId))
+        if (string.IsNullOrWhiteSpace(fileId))
         {
-            throw new Exception("El parámetro documentArtifactId no es válido.");
+            throw new Exception("El parámetro fileId no es válido.");
         }
 
         string token = query["token"]
@@ -56,9 +43,24 @@ public class LaunchService
 
         return new LaunchParameters
         {
-            Backend = backend,
-            DocumentArtifactId = documentArtifactId,
+            InputEndpoint = inputEndpoint,
+            OutputEndpoint = outputEndpoint,
+            FileId = fileId,
             Token = token
         };
+    }
+
+    private static Uri GetEndpoint(string? value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new Exception($"No se recibió el parámetro {parameterName}.");
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? endpoint) ||
+            (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
+        {
+            throw new Exception($"El parámetro {parameterName} no es una URL HTTP válida.");
+        }
+
+        return endpoint;
     }
 }
