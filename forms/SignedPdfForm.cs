@@ -181,5 +181,9 @@ public class SignedPdfForm : Form
         catch
         {
         }
+
+        // Esta es la pantalla final del flujo: el PDF ya fue firmado y subido.
+        // Al cerrarla no debemos regresar a CertificateForm ni a MainForm.
+        Application.Exit();
     }
 }
