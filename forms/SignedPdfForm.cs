@@ -17,6 +17,8 @@ public class SignedPdfForm : Form
 
     private string? _tempPdfFile;
 
+    public bool CloseApplicationRequested { get; private set; }
+
     public SignedPdfForm(byte[] pdfBytes, DownloadService downloadService)
     {
         _pdfBytes = pdfBytes;
@@ -137,6 +139,7 @@ public class SignedPdfForm : Form
         object? sender,
         EventArgs e)
     {
+        CloseApplicationRequested = true;
         Close();
     }
 

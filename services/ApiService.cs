@@ -44,26 +44,47 @@ public class ApiService
 
     public async Task<UpdateDocumentResponse> UpdateDocumentAsync(byte[] pdfBytes)
     {
-        using var content = new ByteArrayContent(pdfBytes);
-        content.Headers.ContentType =
+        using var form = new MultipartFormDataContent();    
+
+        // Archivo PDF
+        using var fileContent = new ByteArrayContent(pdfBytes);
+        fileContent.Headers.ContentType =
             new MediaTypeHeaderValue("application/pdf");
 
-        Uri requestUri = AppendPathSegment(_outputEndpoint, _fileId);
-        var response = await _apiClient.PostAsync(requestUri, content);
+        form.Add(
+            fileContent,
+            "file",
+            "documento-firmado.pdf"
+        );
+
+        // Campo fileId
+        form.Add(
+            new StringContent(_fileId),
+            "fileId"
+        );
+
+        // OJO:
+        // Ya no agregamos _fileId a la URL.
+        // Se manda dentro del multipart/form-data.
+        Uri requestUri = _outputEndpoint;
+
+        var response = await _apiClient.PostAsync(requestUri, form);
 
         var responseBody = await response.Content.ReadAsStringAsync();
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new Exception(GetBackendErrorMessage(responseBody, response));
+            throw new Exception(
+                GetBackendErrorMessage(responseBody, response)
+            );
         }
 
         return JsonSerializer.Deserialize<UpdateDocumentResponse>(
-                responseBody,
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                })
+            responseBody,
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            })
             ?? throw new Exception("No se recibió respuesta.");
     }
 

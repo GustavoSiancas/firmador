@@ -64,29 +64,11 @@ public class LaunchService
     {
         return new LaunchParameters
         {
-            InputEndpoint = GetDevelopmentEndpoint("FIRMADOR_INPUT_ENDPOINT"),
-            OutputEndpoint = GetDevelopmentEndpoint("FIRMADOR_OUTPUT_ENDPOINT"),
-            FileId = GetDevelopmentValue("FIRMADOR_FILE_ID"),
-            Token = GetDevelopmentValue("FIRMADOR_TOKEN")
+            InputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/get-document-artifact-original"),
+            OutputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/upload-document-artifact-version-signed"),
+            FileId = "604912d6-c4ad-4927-af0b-a8ce28a9ce5a",
+            Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYwLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODc2OTAwMDAsImV4cCI6MTc4ODI5NDgwMH0.1Uaa42x8RBzNFJPespr7YqEcXI2JKdzC_AuNz_K_CYc"
         };
-    }
-
-    private static Uri GetDevelopmentEndpoint(string variableName)
-    {
-        return GetEndpoint(GetDevelopmentValue(variableName), variableName);
-    }
-
-    private static string GetDevelopmentValue(string variableName)
-    {
-        string? value = Environment.GetEnvironmentVariable(variableName);
-
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new Exception(
-                $"Para iniciar en modo desarrollo, configura la variable {variableName}.");
-        }
-
-        return value;
     }
 #endif
 

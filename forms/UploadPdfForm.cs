@@ -416,6 +416,12 @@ public partial class UploadPdfForm : Form
 
             preview.ShowDialog(this);
 
+            if (preview.CloseApplicationRequested)
+            {
+                BeginInvoke(Application.Exit);
+                return;
+            }
+
             DialogResult = DialogResult.OK;
             Close();
         }
