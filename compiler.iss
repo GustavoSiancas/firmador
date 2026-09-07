@@ -1,5 +1,5 @@
-﻿#define MyAppName "Firmador CAL"
-#define MyAppVersion "1.01"
+#define MyAppName "Firmador CAL"
+#define MyAppVersion "1.02"
 #define MyAppExeName "FirmadorPades.exe"
 
 [Setup]
@@ -25,7 +25,7 @@ WizardStyle=modern
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Files]
-Source: "bin\distribution-optimized\win-x64-1.01\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "bin\distribution-optimized\win-x64-1.02\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
 Root: HKCR; Subkey: "firmaapp"; ValueType: string; ValueData: "URL:Firmador CAL Protocol"; Flags: uninsdeletekey

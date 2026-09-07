@@ -34,7 +34,7 @@ public class CertificateForm : Form
         _documentBytes = documentBytes;
         _placement = placement;
 
-        Text = "Firmador CAL - Versión 1.01";
+        Text = "Firmador CAL - Versión 1.02";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
 
         Width = 800;
@@ -81,7 +81,7 @@ public class CertificateForm : Form
         btnSign.Click += BtnSign_Click;
         AcceptButton = btnSign;
 
-        Controls.Add(new Label { Text = "Firmador CAL - Versión 1.01", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
+        Controls.Add(new Label { Text = "Firmador CAL - Versión 1.02", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
         Controls.Add(new Label { Text = "Elija el certificado que utilizará para firmar este documento.", AutoSize = true, Location = new Point(32, 56), Font = new Font("Segoe UI", 9), ForeColor = Color.Black });
         Controls.Add(lstCertificates);
         Controls.Add(btnSign);
