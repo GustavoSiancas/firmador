@@ -20,7 +20,6 @@ public class OrchestratorService
     }
 
     public async Task<byte[]> SignDocumentAsync(
-        string documentId,
         byte[] documentMemory,
         string reason,
         X509Certificate2 certificate,

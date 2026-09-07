@@ -66,8 +66,8 @@ public class LaunchService
         {
             InputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/get-document-artifact-original"),
             OutputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/upload-document-artifact-version-signed"),
-            FileId = "604912d6-c4ad-4927-af0b-a8ce28a9ce5a",
-            Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYwLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODc2OTAwMDAsImV4cCI6MTc4ODI5NDgwMH0.1Uaa42x8RBzNFJPespr7YqEcXI2JKdzC_AuNz_K_CYc"
+            FileId = "a182dff9-6d01-4bdd-80fd-5bec4a2e35b4",
+            Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYwLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODg1MzYzODEsImV4cCI6MTc4OTE0MTE4MX0.AKKz_IetGSOUBWJdRnzgIhDXOCJ3PHpy2h4xxZHY05c"
         };
     }
 #endif

@@ -5,12 +5,6 @@ namespace FirmadorPades.Helpers;
 
 public static class CertificateConverter
 {
-    public static Org.BouncyCastle.X509.X509Certificate ToBouncyCastle(X509Certificate2 certificate)
-    {
-        return new X509CertificateParser()
-            .ReadCertificate(certificate.RawData);
-    }
-
     public static Org.BouncyCastle.X509.X509Certificate[] ToChain(X509Certificate2 certificate)
     {
         using var chain = new X509Chain();

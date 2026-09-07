@@ -1,4 +1,4 @@
-﻿using System.Windows.Forms;
+using System.Windows.Forms;
 using FirmadorPades.Forms;
 using FirmadorPades.Models;
 using FirmadorPades.Services;
@@ -27,14 +27,8 @@ internal static class Program
                 parameters.FileId,
                 parameters.Token);
 
-            var cloudinaryService =
-                new CloudinaryService();
-
             var stampService =
                 new StampService();
-
-            var downloadService =
-                new DownloadService();
 
             var pdfSignatureService =
                 new PdfSignatureService();
@@ -51,14 +45,18 @@ internal static class Program
                 .GetResult();
 
             Application.Run(
-                new MainForm(
-                    parameters.FileId,
-                    apiService,
-                    pdfBytes,
+                new CertificateForm(
                     certificateService,
                     orchestratorService,
-                    stampService,
-                    downloadService));
+                    pdfBytes,
+                    new SignatureLocation
+                    {
+                        Page = 1,
+                        X = 50,
+                        Y = 20,
+                        Width = 170,
+                        Height = 60
+                    }));
         }
 #if DEBUG
         catch (Exception ex)

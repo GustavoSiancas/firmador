@@ -63,13 +63,4 @@ public class PdfValidationService
         return result;
     }
 
-    public bool Validate(byte[] pdfBytes)
-    {
-        var signatures = GetSignatures(pdfBytes);
-
-        if (signatures.Count == 0)
-            return false;
-
-        return signatures.All(x => x.IsValid);
-    }
 }

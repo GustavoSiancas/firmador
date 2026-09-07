@@ -5,49 +5,43 @@ using FirmadorPades.Models;
 
 namespace FirmadorPades.Forms;
 
-public partial class CertificateForm : Form
+public class CertificateForm : Form
 {
     private readonly CertificateService _certificateService;
     private readonly OrchestratorService _orchestratorService;
 
-    private readonly string _documentId;
     private readonly byte[] _documentBytes;
     private readonly SignatureLocation _placement;
-    private readonly DownloadService _downloadService;
 
     private readonly ListBox lstCertificates;
 
-    private readonly Button btnRefresh;
+    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 200 };
     private readonly Button btnSign;
 
     private readonly List<CertificateItem> _items = new();
 
-    public byte[]? SignedPdfBytes { get; private set; }
+    private bool _signatureCompleted;
 
     public CertificateForm(
         CertificateService certificateService,
         OrchestratorService orchestratorService,
-        string documentId,
         byte[] documentBytes,
-        SignatureLocation placement,
-        DownloadService downloadService)
+        SignatureLocation placement)
     {
         _certificateService = certificateService;
         _orchestratorService = orchestratorService;
 
-        _documentId = documentId;
         _documentBytes = documentBytes;
         _placement = placement;
-        _downloadService = downloadService;
 
-        Text = "Seleccionar certificado";
+        Text = "Firmador CAL";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
 
         Width = 800;
         Height = 470;
         BackColor = Color.FromArgb(244, 247, 251);
 
-        StartPosition = FormStartPosition.CenterParent;
+        StartPosition = FormStartPosition.CenterScreen;
 
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -69,90 +63,100 @@ public partial class CertificateForm : Form
         };
         lstCertificates.DrawItem += LstCertificates_DrawItem;
 
-        btnRefresh = new Button
-        {
-            Text = "Actualizar",
-            Width = 150,
-            Height = 40,
-            Left = 325,
-            Top = 370,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.White,
-            ForeColor = Color.Black
-        };
-
         btnSign = new Button
         {
             Text = "Firmar",
             Width = 180,
             Height = 45,
-            Left = 495,
-            Top = 368,
+            Left = lstCertificates.Right - 180,
+            Top = lstCertificates.Bottom + 24,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            Cursor = Cursors.Hand,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(20, 125, 106),
             ForeColor = Color.White
         };
 
-        btnRefresh.Click += BtnRefresh_Click;
+        btnSign.FlatAppearance.BorderSize = 0;
         btnSign.Click += BtnSign_Click;
+        AcceptButton = btnSign;
 
-        Controls.Add(new Label { Text = "Seleccione su certificado", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
+        Controls.Add(new Label { Text = "Firmador CAL", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
         Controls.Add(new Label { Text = "Elija el certificado que utilizará para firmar este documento.", AutoSize = true, Location = new Point(32, 56), Font = new Font("Segoe UI", 9), ForeColor = Color.Black });
         Controls.Add(lstCertificates);
-        Controls.Add(btnRefresh);
         Controls.Add(btnSign);
 
+        _refreshTimer.Tick += (_, _) => LoadCertificates();
         Load += CertificateForm_Load;
-    
+
     }
 
-        private void CertificateForm_Load(
-        object? sender,
-        EventArgs e)
+    private void CertificateForm_Load(object? sender, EventArgs e)
     {
         LoadCertificates();
-    }
-
-    private void BtnRefresh_Click(
-        object? sender,
-        EventArgs e)
-    {
-        LoadCertificates();
+        _refreshTimer.Start();
     }
 
     private void LoadCertificates()
     {
-        lstCertificates.Items.Clear();
-
-        _items.Clear();
-
-        var certificates = _certificateService.GetAllCertificates();
-
-        foreach (var cert in certificates)
+        List<X509Certificate2> certificates;
+        try
         {
-            var item = new CertificateItem(cert);
-
-            _items.Add(item);
-
-            lstCertificates.Items.Add(item);
+            certificates = _certificateService.GetAllCertificates();
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // El almacen puede estar temporalmente inaccesible al retirar el dispositivo.
+            certificates = new();
         }
 
-        if (lstCertificates.Items.Count == 0)
+        if (_items.Select(item => item.Certificate.Thumbprint)
+            .SequenceEqual(certificates.Select(cert => cert.Thumbprint)))
         {
-            MessageBox.Show(
-                "No se encontraron certificados de firma (FIR).",
-                "FIRMADOR CAL 2D",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
-            btnSign.Enabled = false;
+            foreach (var cert in certificates)
+                cert.Dispose();
+            btnSign.Enabled = lstCertificates.SelectedItem is CertificateItem;
+            return;
         }
-        else
+
+        string? selected = (lstCertificates.SelectedItem as CertificateItem)?.Certificate.Thumbprint;
+        lstCertificates.BeginUpdate();
+        try
         {
-            lstCertificates.SelectedIndex = 0;
-            btnSign.Enabled = true;
+            lstCertificates.Items.Clear();
+            foreach (var item in _items)
+                item.Certificate.Dispose();
+            _items.Clear();
+
+            foreach (var cert in certificates)
+            {
+                var item = new CertificateItem(cert);
+                _items.Add(item);
+                lstCertificates.Items.Add(item);
+            }
+
+            int selectedIndex = _items.FindIndex(item => item.Certificate.Thumbprint == selected);
+            lstCertificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
+            btnSign.Enabled = lstCertificates.SelectedItem is CertificateItem;
+        }
+        finally
+        {
+            lstCertificates.EndUpdate();
         }
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _refreshTimer.Dispose();
+            foreach (var item in _items)
+                item.Certificate.Dispose();
+            _items.Clear();
+        }
+        base.Dispose(disposing);
+    }
+
     private class CertificateItem
     {
         public X509Certificate2 Certificate { get; }
@@ -172,7 +176,7 @@ public partial class CertificateForm : Form
         {
             MessageBox.Show(
                 "Seleccione un certificado.",
-                "FIRMADOR CAL 2D",
+                "Firmador CAL",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
@@ -180,34 +184,34 @@ public partial class CertificateForm : Form
         }
 
         btnSign.Enabled = false;
-        btnRefresh.Enabled = false;
+        btnSign.Text = "Firmando...";
+        _refreshTimer.Stop();
+        lstCertificates.Enabled = false;
 
         Cursor = Cursors.WaitCursor;
 
-    try
+        try
         {
             const string reason = "Documento firmado digitalmente";
 
-            byte[] signedPdf =
-                await _orchestratorService.SignDocumentAsync(
-                    _documentId,
+            await _orchestratorService.SignDocumentAsync(
                     _documentBytes,
                     reason,
                     item.Certificate,
                     _placement);
 
-            SignedPdfBytes = signedPdf;
+            _signatureCompleted = true;
+            Cursor = Cursors.Default;
 
-            using var signedForm =
-                new SignedPdfForm(signedPdf, _downloadService);
-
-            signedForm.ShowDialog(this);
-            DialogResult = DialogResult.OK;
-            Close();
+            using var resultForm = new SignatureSuccessForm();
+            resultForm.ShowDialog(this);
+            Application.Exit();
         }
         catch (Exception ex)
         {
+            Cursor = Cursors.Default;
             MessageBox.Show(
+                this,
                 ex.Message,
                 "Error al firmar",
                 MessageBoxButtons.OK,
@@ -216,8 +220,13 @@ public partial class CertificateForm : Form
         finally
         {
             Cursor = Cursors.Default;
-            btnSign.Enabled = true;
-            btnRefresh.Enabled = true;
+            if (!IsDisposed && !Disposing && !_signatureCompleted)
+            {
+                btnSign.Text = "Firmar";
+                lstCertificates.Enabled = true;
+                LoadCertificates();
+                _refreshTimer.Start();
+            }
         }
     }
 

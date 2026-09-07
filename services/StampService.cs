@@ -9,9 +9,39 @@ namespace FirmadorPades.Services;
 [SupportedOSPlatform("windows")]
 public class StampService
 {
-    /// <summary>Sello únicamente visual: no contiene titular, certificado ni datos personales.</summary>
-    public byte[] CreatePreviewStamp() =>
-        CreateStamp("SELLO DE PRUEBA", "Vista previa - sin validez legal", isPreview: true);
+    /// <summary>Genera el sello y lo redimensiona al ancho y alto exactos, en píxeles.</summary>
+    public byte[] CreateStamp(string subject, string reason, int width, int height, bool isPreview = false)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        return ResizeStamp(CreateStamp(subject, reason, isPreview), width, height);
+    }
+
+    /// <summary>Redimensiona un sello existente a medidas exactas, en píxeles.</summary>
+    public byte[] ResizeStamp(byte[] stampBytes, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(stampBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        using MemoryStream input = new(stampBytes);
+        using Image original = Image.FromStream(input);
+        using Bitmap resized = new(width, height);
+        using (Graphics graphics = Graphics.FromImage(resized))
+        using (ImageAttributes attributes = new())
+        {
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            attributes.SetWrapMode(WrapMode.TileFlipXY);
+            graphics.DrawImage(original, new Rectangle(0, 0, width, height),
+                0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attributes);
+        }
+
+        using MemoryStream output = new();
+        resized.Save(output, ImageFormat.Png);
+        return output.ToArray();
+    }
 
     [SupportedOSPlatform("windows")]
     public byte[] CreateStamp(
