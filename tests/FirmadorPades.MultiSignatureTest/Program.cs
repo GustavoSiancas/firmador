@@ -6,6 +6,43 @@ using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
 
+if (args.Length == 3 && args[0] == "--sign-once-real")
+{
+    byte[] inputPdf = File.ReadAllBytes(args[1]);
+    var certificateService = new CertificateService();
+    using X509Certificate2 signingCertificate = certificateService.GetSigningCertificate();
+    var stampService = new StampService();
+    var realSingleSigner = new PdfSignatureService();
+    var realSingleValidator = new PdfValidationService();
+    const string reason = "Documento firmado digitalmente";
+
+    var signaturesBefore = realSingleValidator.GetSignatures(inputPdf);
+    if (signaturesBefore.Any(signature => !signature.IsValid))
+        throw new Exception("El PDF de entrada ya contiene una firma criptográficamente inválida.");
+
+    byte[] signedPdf = realSingleSigner.Sign(
+        inputPdf,
+        reason,
+        signingCertificate,
+        stampService.CreateStamp(signingCertificate.Subject, reason),
+        new SignatureLocation { Page = 1, X = 50, Y = 20, Width = 170, Height = 60 });
+
+    var signaturesAfter = realSingleValidator.GetSignatures(signedPdf);
+    if (signaturesAfter.Count != signaturesBefore.Count + 1 ||
+        signaturesAfter.Any(signature => !signature.IsValid))
+    {
+        throw new Exception("El resultado no conservó íntegras todas las firmas.");
+    }
+
+    File.WriteAllBytes(args[2], signedPdf);
+    Console.WriteLine(string.Join(
+        Environment.NewLine,
+        signaturesAfter.Select(signature =>
+            $"{signature.SignatureName}: válida={signature.IsValid}, revisión={signature.Revision}/{signature.TotalRevisions}")));
+    Console.WriteLine($"Resultado: {Path.GetFullPath(args[2])}");
+    return;
+}
+
 if (args.Length == 3 && args[0] == "--double-sign-real")
 {
     byte[] realCurrentPdf = File.ReadAllBytes(args[1]);
