@@ -53,14 +53,11 @@ public class PdfSignatureService
             DigestAlgorithms.SHA256);
         var chain = CertificateConverter.ToChain(certificate);
 
-        signer.SignDetached(
-            externalSignature,
-            chain,
-            null,
-            null,
-            null,
-            0,
-            PdfSigner.CryptoStandard.CADES);
+        signer.GetSignatureAppearance().SetCertificate(chain[0]);
+        document.GetCatalog().AddDeveloperExtension(PdfDeveloperExtension.ESIC_1_7_EXTENSIONLEVEL2);
+        // Reserva para la cadena completa, atributos ESS y firma RSA.
+        int estimatedSize = checked(chain.Sum(c => c.GetEncoded().Length) + 8192);
+        signer.SignExternalContainer(new CadesSignatureContainer(externalSignature, chain), estimatedSize);
 
         return outputStream.ToArray();
     }

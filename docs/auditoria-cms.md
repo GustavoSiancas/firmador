@@ -1,8 +1,18 @@
 # Auditoría CMS/PAdES — 2026-09-07
 
+## Implementación posterior a la comparación con ReFirma
+
+Se implementó una prueba de compatibilidad en producción para firmas nuevas: `CadesSignatureContainer` completa el ESS de iText con `issuerSerial` antes de la operación privada. `PdfSignatureService` usa `SignExternalContainer`, conserva apariencia/certificado, extensión ESIC, append mode y todos los certificados. El CMS base sigue siendo construido por `PdfPKCS7` en modo CADES; se sustituye su único atributo ESS y se firma una sola vez el SET DER definitivo con el proveedor Windows. No se modifica un PDF ya firmado ni se exporta una clave.
+
+Antes: ESS = AlgorithmIdentifier SHA256 + certHash. Después: los mismos campos + issuerSerial (GeneralNames con directoryName del issuer real y serial ASN.1 del leaf). Se conservan el OID RSA original y SHA256 explícito para aislar esta diferencia respecto a ReFirma. Se comprueba la estructura y hash de la plantilla antes de completarla.
+
+Pruebas ejecutadas: una, dos y tres firmas, con issuerSerial obligatorio para las firmas generadas en la prueba, issuer/serial exactos, ESS único, cadena enviada embebida, hashes ByteRange, cobertura y verificación iText/BouncyCastle. El PDF alterado es rechazado. Compilación Release: cero errores y advertencias. Certificado de prueba efímero; pendiente generar un PDF nuevo con RENIEC y verificarlo en ReFirma 1.6. No se declara resuelto el rechazo externo hasta esa comprobación. Los apartados siguientes documentan la auditoría anterior al cambio.
+
 ## Resultado y alcance
 
-No se ha reproducido `NO_SIGNING_CERTIFICATE_FOUND`. No había un PDF afectado ni el nombre, versión o diagnóstico del validador. La ausencia de `issuerSerial` no demuestra la causa. Se conserva el CMS de iText; no se declara resuelta la interoperabilidad ni certificada la conformidad ETSI por estas pruebas.
+Actualización tras recibir la captura: el validador es ReFirma PDF 1.6. Se localizó y auditó `C:\Users\programador_cal\Downloads\documento_firmado2.pdf`. SHA256 del PDF: `000801D5953E93EB60B726E874A22FE48659038E19DF0520EC32BFED64F42BAF`. La auditoría real pasó con una firma, SHA256/RSA, ESS v2 único, leaf embebido, hash ESS y SID coincidentes, ByteRange y cobertura correctos, y verificación criptográfica mediante iText y BouncyCastle. `issuerSerial` está ausente. SHA256 DER del leaf: `B7FB7E8D3569E8A059AE0EEA5E82ADEA2E61A32F2C696720E1E4FC0B585F7878`. La captura confirma el rechazo externo, pero no contiene el diagnóstico interno que permita atribuirlo a issuerSerial. No se cambió el CMS. Esta prueba sin certificado esperado no comprueba que la cadena RENIEC completa esté embebida ni la confianza/revocación de sus certificados.
+
+En la auditoría inicial no había un PDF afectado ni el nombre, versión o diagnóstico del validador. La ausencia de `issuerSerial` no demuestra la causa. Se conserva el CMS de iText; no se declara resuelta la interoperabilidad ni certificada la conformidad ETSI por estas pruebas.
 
 ## Flujo encontrado
 

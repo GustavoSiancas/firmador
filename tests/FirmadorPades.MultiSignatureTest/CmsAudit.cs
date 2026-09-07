@@ -69,6 +69,7 @@ internal static class CmsAudit
             Require(ess.GetCertHash().SequenceEqual(SHA256.HashData(leaf.GetEncoded())), "ESS hash del leaf");
             if (expected != null)
             {
+                Require(ess.IssuerSerial != null, "Las nuevas firmas deben incluir issuerSerial");
                 Require(leaf.GetEncoded().SequenceEqual(expected.RawData), "Certificado seleccionado: DER completo, subject, issuer, serial y SKI");
                 var chain = FirmadorPades.Helpers.CertificateConverter.ToChain(expected);
                 var embedded = cms.GetCertificates("Collection").GetMatches(null).Cast<Org.BouncyCastle.X509.X509Certificate>().ToArray();
