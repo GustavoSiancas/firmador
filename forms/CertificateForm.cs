@@ -194,7 +194,7 @@ public class CertificateForm : Form
         {
             const string reason = "Documento firmado digitalmente";
 
-            await _orchestratorService.SignDocumentAsync(
+            byte[] signedPdf = await _orchestratorService.SignDocumentAsync(
                     _documentBytes,
                     reason,
                     item.Certificate,
@@ -203,7 +203,7 @@ public class CertificateForm : Form
             _signatureCompleted = true;
             Cursor = Cursors.Default;
 
-            using var resultForm = new SignatureSuccessForm();
+            using var resultForm = new SignatureSuccessForm(signedPdf);
             resultForm.ShowDialog(this);
             Application.Exit();
         }

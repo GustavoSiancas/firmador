@@ -6,6 +6,12 @@ using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
 
+if (args.Length == 2 && args[0] == "--audit-cms")
+{
+    CmsAudit.Verify(File.ReadAllBytes(args[1]));
+    return;
+}
+
 if (args.Length == 3 && args[0] == "--sign-once-real")
 {
     byte[] inputPdf = File.ReadAllBytes(args[1]);
@@ -28,6 +34,7 @@ if (args.Length == 3 && args[0] == "--sign-once-real")
         new SignatureLocation { Page = 1, X = 50, Y = 20, Width = 170, Height = 60 });
 
     var signaturesAfter = realSingleValidator.GetSignatures(signedPdf);
+    CmsAudit.Verify(signedPdf);
     if (signaturesAfter.Count != signaturesBefore.Count + 1 ||
         signaturesAfter.Any(signature => !signature.IsValid))
     {
@@ -127,6 +134,7 @@ var request = new CertificateRequest(
     RSASignaturePadding.Pkcs1);
 request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
 request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
+request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
 using X509Certificate2 certificate = request.CreateSelfSigned(
     DateTimeOffset.UtcNow.AddDays(-1),
     DateTimeOffset.UtcNow.AddDays(1));
@@ -142,6 +150,20 @@ for (int expected = 1; expected <= 3; expected++)
 {
     placement.Y -= 70;
     currentPdf = signer.Sign(currentPdf, $"Prueba {expected}", certificate, stamp, placement);
+    CmsAudit.Verify(currentPdf, certificate);
+    string auditOutput = Path.Combine(AppContext.BaseDirectory, "cms-audit");
+    Directory.CreateDirectory(auditOutput);
+    File.WriteAllBytes(Path.Combine(auditOutput, $"prueba-{expected}-firmas.pdf"), currentPdf);
+    if (expected == 1)
+    {
+        byte[] tampered = (byte[])currentPdf.Clone();
+        tampered[7] = tampered[7] == (byte)'7' ? (byte)'6' : (byte)'7';
+        bool rejected = false;
+        try { CmsAudit.Verify(tampered, certificate); }
+        catch (Exception ex) when (ex.Message == "Auditoría CMS: messageDigest de ByteRange") { rejected = true; }
+        if (!rejected) throw new Exception("La auditoría no rechazó un PDF alterado.");
+        Console.WriteLine("Control negativo: modificación de bytes firmados detectada.");
+    }
     using (var signedDocument = new PdfDocument(new PdfReader(new MemoryStream(currentPdf))))
     {
         var field = iText.Forms.PdfAcroForm.GetAcroForm(signedDocument, false).GetField($"Signature{expected}");
