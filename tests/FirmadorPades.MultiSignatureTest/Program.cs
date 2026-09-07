@@ -100,6 +100,16 @@ if (args.Length == 1)
     return;
 }
 
+// Comprueba el renderizado con System.Drawing incluido en Windows Forms.
+byte[] resizedStamp = new StampService().CreateStamp("CN=PRUEBA FIR", "Prueba", 340, 120);
+using (var stampStream = new MemoryStream(resizedStamp))
+using (var stampImage = System.Drawing.Image.FromStream(stampStream))
+{
+    if (stampImage.Width != 340 || stampImage.Height != 120)
+        throw new Exception("El sello no tiene las dimensiones solicitadas.");
+}
+Console.WriteLine("Sello generado y redimensionado correctamente: 340 x 120.");
+
 using RSA rsa = RSA.Create(2048);
 var request = new CertificateRequest(
     "CN=PRUEBA FIR",

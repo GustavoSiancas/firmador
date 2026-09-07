@@ -6,6 +6,7 @@
 
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>assets\logo.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>es</SatelliteResourceLanguages>
 
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -15,7 +16,6 @@
     <Compile Remove="tests\**\*.cs" />
     <PackageReference Include="itext7" Version="7.2.5" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
-    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
     <None Update="assets\**\*">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     <CopyToPublishDirectory>Always</CopyToPublishDirectory>

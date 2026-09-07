@@ -17,7 +17,7 @@ ChangesAssociations=yes
 DisableProgramGroupPage=yes
 OutputDir=bin\installer
 OutputBaseFilename=FirmadorCALSetup
-Compression=lzma2
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 
@@ -28,7 +28,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "bin\distribution\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "bin\distribution-optimized\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
 Root: HKCR; Subkey: "firmaapp"; ValueType: string; ValueData: "URL:Firmador CAL Protocol"; Flags: uninsdeletekey
