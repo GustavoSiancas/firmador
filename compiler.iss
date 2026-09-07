@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Firmador CAL"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.01"
 #define MyAppExeName "FirmadorPades.exe"
 
 [Setup]
@@ -28,7 +28,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "bin\distribution-optimized\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "bin\distribution-optimized\win-x64-1.01\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
 Root: HKCR; Subkey: "firmaapp"; ValueType: string; ValueData: "URL:Firmador CAL Protocol"; Flags: uninsdeletekey

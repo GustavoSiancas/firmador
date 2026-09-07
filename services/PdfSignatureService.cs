@@ -28,12 +28,11 @@ public class PdfSignatureService
             new StampingProperties().UseAppendMode());
 
         PdfDocument document = signer.GetDocument();
-        if (placement.Page < 1 || placement.Page > document.GetNumberOfPages())
-            throw new ArgumentOutOfRangeException(nameof(placement), "La página elegida no existe en el PDF.");
+        int page = document.GetNumberOfPages();
         if (placement.Width <= 0 || placement.Height <= 0)
             throw new ArgumentOutOfRangeException(nameof(placement), "El tamaño de la firma debe ser mayor que cero.");
 
-        PdfRectangle pageSize = document.GetPage(placement.Page).GetPageSize();
+        PdfRectangle pageSize = document.GetPage(page).GetPageSize();
         float width = Math.Min(placement.Width, pageSize.GetWidth());
         float height = Math.Min(placement.Height, pageSize.GetHeight());
         float x = Math.Clamp(placement.X, pageSize.GetLeft(), pageSize.GetRight() - width);
@@ -42,7 +41,7 @@ public class PdfSignatureService
         signer.GetSignatureAppearance()
             .SetReason(reason)
             .SetLocation("Perú")
-            .SetPageNumber(placement.Page)
+            .SetPageNumber(page)
             .SetPageRect(new PdfRectangle(x, y, width, height))
             .SetSignatureGraphic(ImageDataFactory.Create(stampBytes))
             .SetRenderingMode(PdfSignatureAppearance.RenderingMode.GRAPHIC);

@@ -51,9 +51,8 @@ internal static class Program
                     pdfBytes,
                     new SignatureLocation
                     {
-                        Page = 1,
-                        X = 50,
-                        Y = 20,
+                        X = parameters.X,
+                        Y = parameters.Y,
                         Width = 170,
                         Height = 60
                     }));

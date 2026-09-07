@@ -100,6 +100,15 @@ if (args.Length == 1)
     return;
 }
 
+const string launchUri = "firmaapp://sign?inputEndpoint=https%3A%2F%2Fexample.com%2Fin&outputEndpoint=https%3A%2F%2Fexample.com%2Fout&fileId=test&token=test";
+foreach (var (query, x, y) in new[] { ("", 50f, 20f), ("&X=125.5&Y=220.25", 125.5f, 220.25f), ("&x=0", 0f, 20f), ("&y=90", 50f, 90f) })
+{
+    var launch = new LaunchService().GetLaunchParameters(new[] { launchUri + query });
+    if (launch.X != x || launch.Y != y)
+        throw new Exception("Coordenadas de inicio incorrectas.");
+}
+Console.WriteLine("Coordenadas de inicio y valores predeterminados correctos.");
+
 // Comprueba el renderizado con System.Drawing incluido en Windows Forms.
 byte[] resizedStamp = new StampService().CreateStamp("CN=PRUEBA FIR", "Prueba", 340, 120);
 using (var stampStream = new MemoryStream(resizedStamp))
@@ -133,6 +142,15 @@ for (int expected = 1; expected <= 3; expected++)
 {
     placement.Y -= 70;
     currentPdf = signer.Sign(currentPdf, $"Prueba {expected}", certificate, stamp, placement);
+    using (var signedDocument = new PdfDocument(new PdfReader(new MemoryStream(currentPdf))))
+    {
+        var field = iText.Forms.PdfAcroForm.GetAcroForm(signedDocument, false).GetField($"Signature{expected}");
+        var widget = field.GetWidgets()[0];
+        var rectangle = widget.GetRectangle().ToRectangle();
+        if (!widget.GetPage().GetPdfObject().Equals(signedDocument.GetLastPage().GetPdfObject()) ||
+            rectangle.GetX() != placement.X || rectangle.GetY() != placement.Y)
+            throw new Exception("El sello no está en las coordenadas de la última página.");
+    }
     var signatures = validator.GetSignatures(currentPdf);
 
     if (signatures.Count != expected || signatures.Any(signature => !signature.IsValid))
@@ -151,6 +169,8 @@ static byte[] CreatePdf()
     using var pdf = new PdfDocument(new PdfWriter(output));
     using var document = new Document(pdf);
     document.Add(new Paragraph("Prueba de firmas incrementales"));
+    document.Add(new AreaBreak());
+    document.Add(new Paragraph("Última página para los sellos"));
     document.Close();
     return output.ToArray();
 }

@@ -1,4 +1,5 @@
 using System.Web;
+using System.Globalization;
 using FirmadorPades.Models;
 
 namespace FirmadorPades.Services;
@@ -55,7 +56,9 @@ public class LaunchService
             InputEndpoint = inputEndpoint,
             OutputEndpoint = outputEndpoint,
             FileId = fileId,
-            Token = token
+            Token = token,
+            X = GetCoordinate(query["x"], "x", LaunchParameters.DefaultX),
+            Y = GetCoordinate(query["y"], "y", LaunchParameters.DefaultY)
         };
     }
 
@@ -66,11 +69,25 @@ public class LaunchService
         {
             InputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/get-document-artifact-original"),
             OutputEndpoint = new Uri("https://backend.cal.org.pe/servicios-cal-dev/documents/upload-document-artifact-version-signed"),
-            FileId = "a182dff9-6d01-4bdd-80fd-5bec4a2e35b4",
+            FileId = "36b93e5d-52f1-4e91-9770-548edfdeb60c",
             Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYwLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODg1MzYzODEsImV4cCI6MTc4OTE0MTE4MX0.AKKz_IetGSOUBWJdRnzgIhDXOCJ3PHpy2h4xxZHY05c"
         };
     }
 #endif
+
+    private static float GetCoordinate(string? value, string parameterName, float defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+
+        if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float coordinate) ||
+            !float.IsFinite(coordinate))
+        {
+            throw new Exception($"El parámetro {parameterName} debe ser una coordenada numérica válida.");
+        }
+
+        return coordinate;
+    }
 
     private static Uri GetEndpoint(string? value, string parameterName)
     {
