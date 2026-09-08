@@ -299,6 +299,28 @@ static void AssertPreservedRevision(byte[] before, byte[] after)
         throw new Exception("Se cambiaron las extensiones de un PDF firmado.");
 }
 
+bool fallbackReported = false;
+object? fallbackSession = Pkcs11Fallback.OpenOrUseWindows<object>(
+    () => throw new Net.Pkcs11Interop.Common.Pkcs11Exception("C_OpenSession", Net.Pkcs11Interop.Common.CKR.CKR_TOKEN_NOT_RECOGNIZED),
+    () => fallbackReported = true);
+if (fallbackSession is not null || !fallbackReported)
+    throw new Exception("No se activó el respaldo de Windows para un token no reconocido.");
+var compatibleSession = new object();
+if (!ReferenceEquals(Pkcs11Fallback.OpenOrUseWindows(() => compatibleSession), compatibleSession))
+    throw new Exception("Se descartó una sesión PKCS#11 compatible.");
+foreach (var error in new[] { Net.Pkcs11Interop.Common.CKR.CKR_PIN_INCORRECT,
+    Net.Pkcs11Interop.Common.CKR.CKR_PIN_LOCKED, Net.Pkcs11Interop.Common.CKR.CKR_CANCEL })
+{
+    bool propagated = false;
+    try
+    {
+        Pkcs11Fallback.OpenOrUseWindows<object>(() => throw new Net.Pkcs11Interop.Common.Pkcs11Exception("C_Login", error));
+    }
+    catch (Net.Pkcs11Interop.Common.Pkcs11Exception ex) when (ex.RV == error) { propagated = true; }
+    if (!propagated) throw new Exception("Un error de autenticación activó el respaldo indebidamente.");
+}
+Console.WriteLine("Respaldo Windows: token no reconocido activa el cambio; errores de PIN y cancelación se conservan.");
+
 static byte[] CreatePdf()
 {
     using var output = new MemoryStream();

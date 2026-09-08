@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Security;
 using FirmadorPades.Services;
 
 namespace FirmadorPades.Forms;
@@ -19,7 +20,7 @@ public sealed class BatchSignatureForm : Form
 
     public BatchSignatureForm()
     {
-        Text = "Firmador CAL - Prueba local de firma masiva";
+        Text = "Firmador CAL - Firma masiva (IDEMIA PKCS#11)";
         ClientSize = new Size(850, 520);
         MinimumSize = new Size(750, 450);
         StartPosition = FormStartPosition.CenterScreen;
@@ -100,7 +101,15 @@ public sealed class BatchSignatureForm : Form
         var paths = _files.Items.Cast<string>().ToArray();
         var certificate = _ownedCertificates[_certificates.SelectedIndex];
         bool clean = _clean.Checked;
+        SecureString pin;
+        using (var pinForm = new BatchPinForm(paths.Length))
+        {
+            if (pinForm.ShowDialog(this) != DialogResult.OK) return;
+            pin = pinForm.CopyPin();
+        }
+        using var pinLifetime = pin;
         _busy = true;
+        Text = "Firmador CAL - Firma masiva (IDEMIA PKCS#11)";
         _actions.Enabled = _options.Enabled = _files.Enabled = false;
         _progress.Maximum = paths.Length;
         _progress.Value = 0;
@@ -112,7 +121,14 @@ public sealed class BatchSignatureForm : Form
         });
         try
         {
-            var results = await Task.Run(() => new BatchSignatureService().Sign(paths, certificate, clean, progress));
+            var signingStatus = new Progress<string>(message =>
+            {
+                _status.Text = message;
+                Text = "Firmador CAL - Firma por documento con Seguridad de Windows";
+            });
+            IReadOnlyList<BatchSignatureResult> results;
+            using (pin)
+                results = await Task.Run(() => new BatchSignatureService().Sign(paths, certificate, clean, progress, pin, signingStatus));
             using var resultForm = new BatchSignatureResultsForm(results);
             resultForm.ShowDialog(this);
         }
