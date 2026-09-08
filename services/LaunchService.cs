@@ -58,7 +58,8 @@ public class LaunchService
             FileId = fileId,
             Token = token,
             X = GetCoordinate(query["x"], "x", LaunchParameters.DefaultX),
-            Y = GetCoordinate(query["y"], "y", LaunchParameters.DefaultY)
+            Y = GetCoordinate(query["y"], "y", LaunchParameters.DefaultY),
+            Clean = GetClean(query["clean"])
         };
     }
 
@@ -74,6 +75,17 @@ public class LaunchService
         };
     }
 #endif
+
+    private static bool GetClean(string? value)
+    {
+        if (value is null)
+            return false;
+
+        if (!bool.TryParse(value, out bool clean))
+            throw new ArgumentException("El parámetro clean debe ser true o false.");
+
+        return clean;
+    }
 
     private static float GetCoordinate(string? value, string parameterName, float defaultValue)
     {

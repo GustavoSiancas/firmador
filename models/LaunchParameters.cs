@@ -7,6 +7,8 @@ public class LaunchParameters
     public float X { get; set; } = DefaultX;
     public float Y { get; set; } = DefaultY;
 
+    public bool Clean { get; set; } = false;
+
     public Uri InputEndpoint { get; set; } = null!;
 
     public Uri OutputEndpoint { get; set; } = null!;

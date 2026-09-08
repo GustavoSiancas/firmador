@@ -44,6 +44,9 @@ internal static class Program
                 .GetAwaiter()
                 .GetResult();
 
+            if (parameters.Clean)
+                pdfBytes = new PdfCleaningService().Clean(pdfBytes);
+
             Application.Run(
                 new CertificateForm(
                     certificateService,

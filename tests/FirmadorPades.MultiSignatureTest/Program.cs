@@ -185,6 +185,43 @@ for (int expected = 1; expected <= 3; expected++)
     Console.WriteLine(report);
 }
 
+foreach (var (query, expectedClean) in new[] { ("", false), ("&clean=false", false), ("&clean=true", true) })
+{
+    if (new LaunchService().GetLaunchParameters(new[] { launchUri + query }).Clean != expectedClean)
+        throw new Exception("Valor de clean incorrecto.");
+}
+bool invalidCleanRejected = false;
+try { new LaunchService().GetLaunchParameters(new[] { launchUri + "&clean=invalid" }); }
+catch (ArgumentException) { invalidCleanRejected = true; }
+if (!invalidCleanRejected) throw new Exception("Se aceptó un clean inválido.");
+
+byte[] originalBytes = currentPdf.ToArray();
+byte[] cleanedPdf = new PdfCleaningService().Clean(currentPdf);
+if (!currentPdf.SequenceEqual(originalBytes) || validator.GetSignatures(currentPdf).Count != 3)
+    throw new Exception("La limpieza modificó la entrada.");
+if (validator.GetSignatures(cleanedPdf).Count != 0)
+    throw new Exception("Quedan firmas después de limpiar.");
+using (var original = new PdfDocument(new PdfReader(new MemoryStream(currentPdf))))
+using (var cleaned = new PdfDocument(new PdfReader(new MemoryStream(cleanedPdf))))
+{
+    if (original.GetNumberOfPages() != cleaned.GetNumberOfPages())
+        throw new Exception("La limpieza cambió las páginas.");
+    for (int page = 1; page <= original.GetNumberOfPages(); page++)
+    {
+        if (!original.GetPage(page).GetContentBytes().SequenceEqual(cleaned.GetPage(page).GetContentBytes()))
+            throw new Exception("La limpieza cambió el contenido de una página.");
+        if (cleaned.GetPage(page).GetAnnotations().Count != 0)
+            throw new Exception("Quedan apariencias de firma.");
+    }
+}
+byte[] signedAgain = signer.Sign(cleanedPdf, "Firma después de limpiar", certificate, stamp, placement);
+var newSignatures = validator.GetSignatures(signedAgain);
+if (newSignatures.Count != 1 || !newSignatures[0].IsValid)
+    throw new Exception("No se pudo firmar el PDF limpio.");
+if (validator.GetSignatures(new PdfCleaningService().Clean(CreatePdf())).Count != 0)
+    throw new Exception("Falló la limpieza de un PDF sin firmas.");
+Console.WriteLine("Limpieza correcta: entrada intacta, contenido conservado, sin firmas y nueva firma válida.");
+
 static byte[] CreatePdf()
 {
     using var output = new MemoryStream();
