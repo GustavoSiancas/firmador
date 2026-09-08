@@ -14,6 +14,12 @@ internal static class Program
 
         try
         {
+            if (args.Length == 0 || (args.Length == 1 && args[0] == "--batch-test"))
+            {
+                Application.Run(new BatchSignatureForm());
+                return;
+            }
+
             var launchService = new LaunchService();
 
             LaunchParameters parameters =

@@ -18,6 +18,18 @@ public class PdfSignatureService
         byte[] stampBytes,
         SignatureLocation placement)
     {
+        return Sign(pdfBytes, reason, certificate, stampBytes, placement,
+            new X509Certificate2Signature(certificate, DigestAlgorithms.SHA256));
+    }
+
+    internal byte[] Sign(
+        byte[] pdfBytes,
+        string reason,
+        X509Certificate2 certificate,
+        byte[] stampBytes,
+        SignatureLocation placement,
+        IExternalSignature externalSignature)
+    {
         using var inputStream = new MemoryStream(pdfBytes);
         using var outputStream = new MemoryStream();
         using var reader = new PdfReader(inputStream);
@@ -48,9 +60,6 @@ public class PdfSignatureService
 
         signer.SetFieldName(GetNextSignatureFieldName(document));
 
-        var externalSignature = new X509Certificate2Signature(
-            certificate,
-            DigestAlgorithms.SHA256);
         var chain = CertificateConverter.ToChain(certificate);
 
         signer.GetSignatureAppearance().SetCertificate(chain[0]);
