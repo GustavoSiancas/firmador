@@ -1,5 +1,4 @@
 using System.Security.Cryptography.X509Certificates;
-using System.Security;
 using FirmadorPades.Services;
 
 namespace FirmadorPades.Forms;
@@ -20,7 +19,7 @@ public sealed class BatchSignatureForm : Form
 
     public BatchSignatureForm()
     {
-        Text = "Firmador CAL - Prueba de firma masiva (IDEMIA PKCS#11)";
+        Text = "Firmador CAL - Prueba local de firma masiva";
         ClientSize = new Size(850, 520);
         MinimumSize = new Size(750, 450);
         StartPosition = FormStartPosition.CenterScreen;
@@ -101,12 +100,6 @@ public sealed class BatchSignatureForm : Form
         var paths = _files.Items.Cast<string>().ToArray();
         var certificate = _ownedCertificates[_certificates.SelectedIndex];
         bool clean = _clean.Checked;
-        SecureString pin;
-        using (var pinForm = new BatchPinForm(paths.Length))
-        {
-            if (pinForm.ShowDialog(this) != DialogResult.OK) return;
-            pin = pinForm.CopyPin();
-        }
         _busy = true;
         _actions.Enabled = _options.Enabled = _files.Enabled = false;
         _progress.Maximum = paths.Length;
@@ -119,9 +112,7 @@ public sealed class BatchSignatureForm : Form
         });
         try
         {
-            IReadOnlyList<BatchSignatureResult> results;
-            using (pin)
-                results = await Task.Run(() => new BatchSignatureService().Sign(paths, certificate, clean, progress, pin, usePkcs11: true));
+            var results = await Task.Run(() => new BatchSignatureService().Sign(paths, certificate, clean, progress));
             using var resultForm = new BatchSignatureResultsForm(results);
             resultForm.ShowDialog(this);
         }

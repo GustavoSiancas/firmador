@@ -6,19 +6,6 @@ using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
 
-if (args.Length == 1 && args[0] == "--probe-pkcs11")
-{
-    var certificates = new CertificateService().GetAllCertificates();
-    try
-    {
-        int matches = Pkcs11SigningSession.CountMatchingCertificates(certificates);
-        Console.WriteLine($"Certificados de firma de Windows encontrados en PKCS#11: {matches}. Sin autenticación ni firmas.");
-        if (matches == 0) throw new Exception("No se encontró un certificado de firma coincidente.");
-    }
-    finally { foreach (var probeCertificate in certificates) probeCertificate.Dispose(); }
-    return;
-}
-
 if (args.Length == 2 && args[0] == "--audit-cms")
 {
     CmsAudit.Verify(File.ReadAllBytes(args[1]));
@@ -162,7 +149,9 @@ var validator = new PdfValidationService();
 for (int expected = 1; expected <= 3; expected++)
 {
     placement.Y -= 70;
+    byte[] previousRevision = currentPdf;
     currentPdf = signer.Sign(currentPdf, $"Prueba {expected}", certificate, stamp, placement);
+    AssertPreservedRevision(previousRevision, currentPdf);
     CmsAudit.Verify(currentPdf, certificate);
     string auditOutput = Path.Combine(AppContext.BaseDirectory, "cms-audit");
     Directory.CreateDirectory(auditOutput);
@@ -263,17 +252,52 @@ catch (ArgumentException) { oversizedRejected = true; }
 if (!oversizedRejected) throw new Exception("Se aceptaron más de 20 PDFs.");
 Console.WriteLine("Lote de 20 PDFs: firmas válidas, originales intactos, límite y errores parciales verificados.");
 
-using (var cngTestKey = new RSACng(2048))
+// Una firma CMS externa puede no declarar /Extensions. La contrafirma no debe
+// introducir esa entrada en el catálogo de una revisión ya firmada.
+byte[] externalSignedPdf;
+using (var externalInput = new MemoryStream(CreatePdf()))
+using (var externalOutput = new MemoryStream())
+using (var externalReader = new PdfReader(externalInput))
 {
-    for (int index = 0; index < 20; index++)
-    {
-        byte[] message = RandomNumberGenerator.GetBytes(80);
-        byte[] signature = SessionPinService.SignCngSilently(cngTestKey, message);
-        if (!cngTestKey.VerifyData(message, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
-            throw new Exception("Firma CNG silenciosa inválida.");
-    }
+    var externalSigner = new iText.Signatures.PdfSigner(externalReader, externalOutput,
+        new StampingProperties().UseAppendMode());
+    externalSigner.SetFieldName("ExternalSignature");
+    externalSigner.SignDetached(
+        new FirmadorPades.Helpers.X509Certificate2Signature(certificate, "SHA256"),
+        FirmadorPades.Helpers.CertificateConverter.ToChain(certificate),
+        null, null, null, 0, iText.Signatures.PdfSigner.CryptoStandard.CMS);
+    externalSignedPdf = externalOutput.ToArray();
 }
-Console.WriteLine("20 operaciones CNG nativas en modo silencioso verificadas con clave de prueba.");
+using (var externalDocument = new PdfDocument(new PdfReader(new MemoryStream(externalSignedPdf))))
+{
+    if (externalDocument.GetCatalog().GetPdfObject().ContainsKey(PdfName.Extensions))
+        throw new Exception("El caso de prueba debe empezar sin extensiones.");
+}
+byte[] appendedPdf = signer.Sign(externalSignedPdf, "Firma adicional", certificate, stamp, placement);
+AssertPreservedRevision(externalSignedPdf, appendedPdf);
+if (validator.GetSignatures(appendedPdf).Count != 2 || validator.GetSignatures(appendedPdf).Any(s => !s.IsValid))
+    throw new Exception("Falló la conservación de la firma CMS externa.");
+Console.WriteLine("Firma adicional: catálogo sin extensiones nuevas, páginas intactas y ambas firmas válidas.");
+
+static void AssertPreservedRevision(byte[] before, byte[] after)
+{
+    if (!after.AsSpan(0, before.Length).SequenceEqual(before))
+        throw new Exception("Se reescribieron bytes de la revisión anterior.");
+    using var previous = new PdfDocument(new PdfReader(new MemoryStream(before)));
+    using var current = new PdfDocument(new PdfReader(new MemoryStream(after)));
+    if (previous.GetNumberOfPages() != current.GetNumberOfPages())
+        throw new Exception("Se cambió la cantidad de páginas.");
+    for (int page = 1; page <= previous.GetNumberOfPages(); page++)
+        if (!previous.GetPage(page).GetContentBytes().SequenceEqual(current.GetPage(page).GetContentBytes()))
+            throw new Exception("Se modificó contenido de página al agregar una firma.");
+    if (new iText.Signatures.SignatureUtil(previous).GetSignatureNames().Count == 0) return;
+    var previousCatalog = previous.GetCatalog().GetPdfObject();
+    var currentCatalog = current.GetCatalog().GetPdfObject();
+    if (!previousCatalog.KeySet().OrderBy(k => k.ToString()).SequenceEqual(currentCatalog.KeySet().OrderBy(k => k.ToString())))
+        throw new Exception("Se agregaron o quitaron entradas del catálogo después de una firma.");
+    if (previousCatalog.GetAsDictionary(PdfName.Extensions)?.ToString() != currentCatalog.GetAsDictionary(PdfName.Extensions)?.ToString())
+        throw new Exception("Se cambiaron las extensiones de un PDF firmado.");
+}
 
 static byte[] CreatePdf()
 {

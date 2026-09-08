@@ -63,7 +63,10 @@ public class PdfSignatureService
         var chain = CertificateConverter.ToChain(certificate);
 
         signer.GetSignatureAppearance().SetCertificate(chain[0]);
-        document.GetCatalog().AddDeveloperExtension(PdfDeveloperExtension.ESIC_1_7_EXTENSIONLEVEL2);
+        // Declarar la extensión antes de la primera firma. No introducir ni
+        // actualizar /Extensions en revisiones que ya contienen firmas.
+        if (new SignatureUtil(document).GetSignatureNames().Count == 0)
+            document.GetCatalog().AddDeveloperExtension(PdfDeveloperExtension.ESIC_1_7_EXTENSIONLEVEL2);
         // Reserva para la cadena completa, atributos ESS y firma RSA.
         int estimatedSize = checked(chain.Sum(c => c.GetEncoded().Length) + 8192);
         signer.SignExternalContainer(new CadesSignatureContainer(externalSignature, chain), estimatedSize);
