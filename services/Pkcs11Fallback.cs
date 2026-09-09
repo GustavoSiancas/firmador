@@ -14,6 +14,7 @@ internal static class Pkcs11Fallback
         }
     }
 
+    // 
     private static bool IsCompatibilityError(Exception ex) =>
         ex is DllNotFoundException or BadImageFormatException ||
         ex is Pkcs11Exception pkcs11 && pkcs11.RV is
