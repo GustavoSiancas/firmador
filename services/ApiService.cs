@@ -69,9 +69,6 @@ public class ApiService
             "fileId"
         );
 
-        // OJO:
-        // Ya no agregamos _fileId a la URL.
-        // Se manda dentro del multipart/form-data.
         Uri requestUri = _outputEndpoint;
 
         var response = await _apiClient.PostAsync(requestUri, form);

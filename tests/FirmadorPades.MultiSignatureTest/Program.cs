@@ -187,7 +187,7 @@ for (int expected = 1; expected <= 3; expected++)
     Console.WriteLine(report);
 }
 
-foreach (var (query, expectedClean) in new[] { ("", false), ("&clean=false", false), ("&clean=true", true) })
+foreach (var (query, expectedClean) in new[] { ("", false), ("&clean=false", false), ("&clean=true", true), ("&clean=True", true), ("&clean=False", false) })
 {
     if (new LaunchService().GetLaunchParameters(new[] { launchUri + query }).Clean != expectedClean)
         throw new Exception("Valor de clean incorrecto.");
