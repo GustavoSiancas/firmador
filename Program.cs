@@ -14,7 +14,7 @@ internal static class Program
 
         try
         {
-            if (args.Length == 0 || (args.Length == 1 && args[0] == "--batch-test"))
+            if (args.Length == 1 && args[0] == "--batch-test")
             {
                 Application.Run(new BatchSignatureForm());
                 return;
@@ -64,7 +64,8 @@ internal static class Program
                         Y = parameters.Y,
                         Width = 170,
                         Height = 60
-                    }));
+                    },
+                    apiService.DocumentFileName));
         }
 #if DEBUG
         catch (Exception ex)

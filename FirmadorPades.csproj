@@ -20,6 +20,7 @@
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
     <PackageReference Include="itext7" Version="7.2.5" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="Pkcs11Interop" Version="5.3.0" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
     <None Update="assets\**\*">
@@ -29,4 +30,10 @@
   </None>
   </ItemGroup>
 
+  <!-- WebView2 also supplies a WPF reference; this application only uses WinForms. -->
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -11,6 +11,7 @@ public class ApiService
     private readonly Uri _outputEndpoint;
 
     private readonly string _fileId;
+    public string DocumentFileName { get; private set; } = "documento.pdf";
 
     public ApiService(
         Uri inputEndpoint,
@@ -31,7 +32,7 @@ public class ApiService
     public async Task<byte[]> GetDocumentPdfAsync()
     {
         Uri requestUri = AppendPathSegment(_inputEndpoint, _fileId);
-        var response = await _apiClient.GetAsync(requestUri);
+        using var response = await _apiClient.GetAsync(requestUri);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -39,6 +40,11 @@ public class ApiService
             throw new Exception(GetBackendErrorMessage(responseBody, response));
         }
 
+        var disposition = response.Content.Headers.ContentDisposition;
+        string? name = disposition?.FileNameStar ?? disposition?.FileName;
+        DocumentFileName = string.IsNullOrWhiteSpace(name)
+            ? "documento.pdf"
+            : Path.GetFileName(name.Trim('"').Replace('\\', '/'));
         return await response.Content.ReadAsByteArrayAsync();
     }
 

@@ -21,27 +21,36 @@ public class CertificateForm : Form
     private readonly List<CertificateItem> _items = new();
 
     private bool _signatureCompleted;
+    private readonly string _documentFileName;
+    private DocumentPreviewForm? _previewForm;
 
     public CertificateForm(
         CertificateService certificateService,
         OrchestratorService orchestratorService,
         byte[] documentBytes,
-        SignatureLocation placement)
+        SignatureLocation placement,
+        string documentFileName = "documento.pdf")
     {
         _certificateService = certificateService;
         _orchestratorService = orchestratorService;
 
         _documentBytes = documentBytes;
         _placement = placement;
+        _documentFileName = documentFileName;
 
         Text = "Firmador CAL - Versión 1.02";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
 
-        Width = 800;
+        Width = 560;
         Height = 470;
         BackColor = Color.FromArgb(244, 247, 251);
 
         StartPosition = FormStartPosition.CenterScreen;
+
+        Shown += (_, _) =>
+        {
+            Left -= 200;
+        };
 
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -51,7 +60,7 @@ public class CertificateForm : Form
         {
             Left = 30,
             Top = 92,
-            Width = 725,
+            Width = ClientSize.Width - 60,
             Height = 245,
             Font = new Font("Segoe UI", 11),
             ForeColor = Color.Black,
@@ -83,12 +92,40 @@ public class CertificateForm : Form
 
         Controls.Add(new Label { Text = "Firmador CAL - Versión 1.02", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
         Controls.Add(new Label { Text = "Elija el certificado que utilizará para firmar este documento.", AutoSize = true, Location = new Point(32, 56), Font = new Font("Segoe UI", 9), ForeColor = Color.Black });
+        var documents = new DocumentCountControl
+        {
+            Location = new Point(lstCertificates.Right - 75, 12),
+            Size = new Size(75, 68),
+            DocumentCount = _documentBytes.Length > 0 ? 1 : 0
+        };
+        documents.Click += (_, _) => ShowDocumentPreview();
+        Controls.Add(documents);
         Controls.Add(lstCertificates);
         Controls.Add(btnSign);
 
         _refreshTimer.Tick += (_, _) => LoadCertificates();
         Load += CertificateForm_Load;
 
+    }
+
+    private void ShowDocumentPreview()
+    {
+        if (_documentBytes.Length == 0)
+            return;
+
+        if (_previewForm is { IsDisposed: false })
+        {
+            _previewForm.Activate();
+            return;
+        }
+
+        _previewForm = new DocumentPreviewForm(
+            _documentBytes,
+            _documentFileName,
+            this
+        );
+
+        _previewForm.Show(this);
     }
 
     private void CertificateForm_Load(object? sender, EventArgs e)
