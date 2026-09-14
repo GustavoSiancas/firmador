@@ -213,34 +213,6 @@ if (validator.GetSignatures(new PdfCleaningService().Clean(CreatePdf())).Count !
     throw new Exception("Falló la limpieza de un PDF sin firmas.");
 Console.WriteLine("Limpieza correcta: entrada intacta, contenido conservado, sin firmas y nueva firma válida.");
 
-string batchDirectory = Path.Combine(AppContext.BaseDirectory, "batch-test", Guid.NewGuid().ToString("N"));
-Directory.CreateDirectory(batchDirectory);
-var batchPaths = Enumerable.Range(1, 20).Select(index => Path.Combine(batchDirectory, $"documento-{index}.pdf")).ToArray();
-foreach (string path in batchPaths) File.WriteAllBytes(path, currentPdf);
-var batchService = new BatchSignatureService();
-var batchResults = batchService.Sign(batchPaths, certificate, clean: true);
-if (batchResults.Count != 20 || batchResults.Any(result => result.Error is not null || result.PdfBytes is null))
-    throw new Exception("Falló la firma del lote de 20 PDFs.");
-foreach (var result in batchResults)
-{
-    var signatures = validator.GetSignatures(result.PdfBytes!);
-    if (signatures.Count != 1 || !signatures[0].IsValid)
-        throw new Exception("El lote contiene una firma inválida.");
-}
-if (batchPaths.Any(path => !File.ReadAllBytes(path).SequenceEqual(currentPdf)))
-    throw new Exception("La firma masiva modificó los archivos originales.");
-string invalidPath = Path.Combine(batchDirectory, "invalido.pdf");
-File.WriteAllText(invalidPath, "No es un PDF");
-var mixedResults = batchService.Sign(new[] { invalidPath, batchPaths[0] }, certificate, clean: false);
-if (mixedResults[0].Error is null || mixedResults[1].PdfBytes is null ||
-    validator.GetSignatures(mixedResults[1].PdfBytes!).Count != 4)
-    throw new Exception("El lote no continuó tras un error o no conservó las firmas existentes.");
-bool oversizedRejected = false;
-try { batchService.Sign(batchPaths.Append(batchPaths[0]).ToArray(), certificate, false); }
-catch (ArgumentException) { oversizedRejected = true; }
-if (!oversizedRejected) throw new Exception("Se aceptaron más de 20 PDFs.");
-Console.WriteLine("Lote de 20 PDFs: firmas válidas, originales intactos, límite y errores parciales verificados.");
-
 // Una firma CMS externa puede no declarar /Extensions. La contrafirma no debe
 // introducir esa entrada en el catálogo de una revisión ya firmada.
 byte[] externalSignedPdf;

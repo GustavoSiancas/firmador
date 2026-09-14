@@ -4,20 +4,59 @@ namespace FirmadorPades.Forms;
 
 internal sealed class BatchPinForm : Form
 {
+    private static readonly Color BrandTeal = Color.FromArgb(20, 125, 106);
+    private static readonly Color BrandTealDark = Color.FromArgb(13, 93, 79);
+    private static readonly Color Surface = Color.FromArgb(244, 247, 251);
     private readonly SecureString _pin = new();
-    private readonly TextBox _input = new() { Left = 20, Top = 70, Width = 350, ReadOnly = true, ShortcutsEnabled = false };
+    private readonly TextBox _input = new()
+    {
+        Left = 22, Top = 111, Width = 356, Height = 34, ReadOnly = true,
+        ShortcutsEnabled = false, Font = new Font("Segoe UI", 12),
+        BackColor = Color.White, BorderStyle = BorderStyle.FixedSingle
+    };
 
     internal BatchPinForm(int count)
     {
         Text = "PIN para el lote";
-        ClientSize = new Size(400, 165);
+        ClientSize = new Size(400, 220);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        Controls.Add(new Label { Left = 20, Top = 15, Width = 360, Height = 45,
-            Text = $"Ingrese el PIN para firmar {count} PDFs. Se conservará en memoria solo durante este lote." });
-        var accept = new Button { Left = 185, Top = 115, Width = 100, Text = "Continuar", Enabled = false };
-        var cancel = new Button { Left = 290, Top = 115, Width = 90, Text = "Cancelar", DialogResult = DialogResult.Cancel };
+        BackColor = Surface;
+        Font = new Font("Segoe UI", 9);
+        var header = new Panel { Dock = DockStyle.Top, Height = 76, BackColor = BrandTeal };
+        header.Controls.Add(new Label
+        {
+            Text = "Confirmar firma", AutoSize = true, Location = new Point(22, 13),
+            Font = new Font("Segoe UI", 15, FontStyle.Bold), ForeColor = Color.White
+        });
+        header.Controls.Add(new Label
+        {
+            Text = $"Ingrese el PIN para firmar {count} documentos", AutoSize = true,
+            Location = new Point(24, 44), ForeColor = Color.FromArgb(222, 244, 240)
+        });
+        Controls.Add(header);
+        Controls.Add(new Label
+        {
+            Left = 22, Top = 91, Width = 356, Height = 18,
+            Text = "PIN del certificado", ForeColor = Color.FromArgb(84, 97, 110),
+            Font = new Font("Segoe UI", 8, FontStyle.Bold)
+        });
+        var accept = new Button
+        {
+            Left = 178, Top = 164, Width = 110, Height = 36, Text = "Continuar", Enabled = false,
+            FlatStyle = FlatStyle.Flat, BackColor = BrandTeal, ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold)
+        };
+        accept.FlatAppearance.BorderSize = 0;
+        accept.FlatAppearance.MouseOverBackColor = BrandTealDark;
+        var cancel = new Button
+        {
+            Left = 298, Top = 164, Width = 80, Height = 36, Text = "Cancelar",
+            DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat,
+            BackColor = Color.White, ForeColor = Color.FromArgb(50, 62, 73)
+        };
+        cancel.FlatAppearance.BorderColor = Color.FromArgb(190, 200, 209);
         _input.KeyPress += (_, e) =>
         {
             e.Handled = true;

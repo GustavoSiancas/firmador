@@ -5,9 +5,11 @@ using FirmadorPades.Models;
 
 namespace FirmadorPades.Services;
 
+public sealed record TemporarySignatureResult(string FileName, string? Error);
+
 public sealed class TemporaryBatchSignatureService
 {
-    public async Task<IReadOnlyList<BatchSignatureResult>> SignAndUploadAsync(
+    public async Task<IReadOnlyList<TemporarySignatureResult>> SignAndUploadAsync(
         IReadOnlyList<TemporarySigningDocument> documents,
         X509Certificate2 certificate,
         ApiService apiService,
@@ -16,7 +18,7 @@ public sealed class TemporaryBatchSignatureService
         IProgress<string>? status = null)
     {
         const string reason = "Documento firmado digitalmente";
-        var results = new List<BatchSignatureResult>(documents.Count);
+        var results = new List<TemporarySignatureResult>(documents.Count);
         var signer = new PdfSignatureService();
         byte[] stamp = new StampService().CreateStamp(certificate.Subject, reason);
 
@@ -38,18 +40,18 @@ public sealed class TemporaryBatchSignatureService
                     : signer.Sign(document.PdfBytes, reason, certificate, stamp, document.SignatureLocation, session);
 
                 await apiService.UpdateDocumentAsync(document.Id, signedPdf);
-                results.Add(new BatchSignatureResult(document.FileName, signedPdf, null));
+                results.Add(new TemporarySignatureResult(document.FileName, null));
             }
             catch (Exception ex)
             {
-                results.Add(new BatchSignatureResult(document.FileName, null, ex.Message));
+                results.Add(new TemporarySignatureResult(document.FileName, ex.Message));
 
                 // No reintentar un PIN inválido: puede bloquear el DNIe.
                 if (ex is CryptographicException)
                 {
                     foreach (TemporarySigningDocument pending in documents.Skip(index + 1))
                     {
-                        results.Add(new BatchSignatureResult(pending.FileName, null,
+                        results.Add(new TemporarySignatureResult(pending.FileName,
                             "No procesado: se detuvo el lote por un error criptográfico. Revise el PIN y el DNIe."));
                     }
                     progress?.Report(results.Count);

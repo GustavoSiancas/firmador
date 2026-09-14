@@ -13,18 +13,17 @@ public class LaunchService
 #endif
 
         if (args.Length != 1)
-            throw new Exception("Esta aplicación solo puede iniciarse desde el sistema web.");
+            throw new LaunchParameterException("Esta aplicación solo puede iniciarse desde el sistema web.");
 
-        Uri uri = new(args[0]);
-        if (uri.Scheme != "firmaapp")
-            throw new Exception("Protocolo no válido.");
+        if (!Uri.TryCreate(args[0], UriKind.Absolute, out Uri? uri) || uri.Scheme != "firmaapp")
+            throw new LaunchParameterException("Protocolo no válido.");
 
         var query = HttpUtility.ParseQueryString(uri.Query);
         string token = query["token"]
-            ?? throw new Exception("No se recibió el parámetro token.");
+            ?? throw new LaunchParameterException("No se recibió el parámetro token.");
 
         if (string.IsNullOrWhiteSpace(token))
-            throw new Exception("El parámetro token no es válido.");
+            throw new LaunchParameterException("El parámetro token no es válido.");
 
         return new LaunchParameters
         {
@@ -45,12 +44,12 @@ public class LaunchService
     private static Uri GetEndpoint(string? value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new Exception($"No se recibió el parámetro {parameterName}.");
+            throw new LaunchParameterException($"No se recibió el parámetro {parameterName}.");
 
         if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? endpoint) ||
             (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
         {
-            throw new Exception($"El parámetro {parameterName} no es una URL HTTP válida.");
+            throw new LaunchParameterException($"El parámetro {parameterName} no es una URL HTTP válida.");
         }
 
         return endpoint;

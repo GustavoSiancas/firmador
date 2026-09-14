@@ -91,7 +91,7 @@ public class ApiService
         return TemporaryDocuments;
     }
 
-    public async Task<UpdateDocumentResponse> UpdateDocumentAsync(
+    public async Task UpdateDocumentAsync(
         string documentId,
         byte[] pdfBytes)
     {
@@ -108,10 +108,6 @@ public class ApiService
         if (!response.IsSuccessStatusCode)
             throw new Exception(GetBackendErrorMessage(responseBody, response));
 
-        return JsonSerializer.Deserialize<UpdateDocumentResponse>(
-            responseBody,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new Exception("No se recibió respuesta al actualizar el documento.");
     }
 
     private TemporaryResourcesResponse GetTemporaryResources() =>
@@ -153,14 +149,29 @@ public class ApiService
         float width = Math.Min(signatureWidth, pageSize.GetWidth());
         float height = Math.Min(signatureHeight, pageSize.GetHeight());
 
-        float x = resource.X ?? pageSize.GetRight() - width - signatureMargin;
-        float y = resource.Y ?? pageSize.GetBottom() + signatureMargin;
+        float defaultX = Math.Clamp(pageSize.GetRight() - width - signatureMargin,
+            pageSize.GetLeft(), pageSize.GetRight() - width);
+        float defaultY = Math.Clamp(pageSize.GetBottom() + signatureMargin,
+            pageSize.GetBottom(), pageSize.GetTop() - height);
+
+        // Las coordenadas corresponden a la esquina inferior izquierda. Si el
+        // rectángulo completo se sale de la página, se usa la ubicación segura.
+        bool hasValidExternalPosition = resource.X is float requestedX &&
+            resource.Y is float requestedY &&
+            float.IsFinite(requestedX) && float.IsFinite(requestedY) &&
+            requestedX >= pageSize.GetLeft() &&
+            requestedX + width <= pageSize.GetRight() &&
+            requestedY >= pageSize.GetBottom() &&
+            requestedY + height <= pageSize.GetTop();
+
+        float x = hasValidExternalPosition ? resource.X!.Value : defaultX;
+        float y = hasValidExternalPosition ? resource.Y!.Value : defaultY;
 
         return new SignatureLocation
         {
             Page = page,
-            X = Math.Clamp(x, pageSize.GetLeft(), pageSize.GetRight() - width),
-            Y = Math.Clamp(y, pageSize.GetBottom(), pageSize.GetTop() - height),
+            X = x,
+            Y = y,
             Width = width,
             Height = height
         };

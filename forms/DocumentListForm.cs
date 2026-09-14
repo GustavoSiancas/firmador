@@ -8,6 +8,8 @@ namespace FirmadorPades.Forms;
 internal sealed class DocumentListForm : Form
 {
     private const string DocumentUrl = "https://documento.invalid/documento.pdf";
+    private static readonly Color BrandTeal = Color.FromArgb(20, 125, 106);
+    private static readonly Color Surface = Color.FromArgb(244, 247, 251);
     private readonly IReadOnlyList<TemporarySigningDocument> _documents;
     private readonly WebView2 _viewer = new() { Dock = DockStyle.Fill };
     private readonly Label _status = new()
@@ -32,6 +34,8 @@ internal sealed class DocumentListForm : Form
         StartPosition = FormStartPosition.Manual;
         Size = new Size(1080, 760);
         MinimizeBox = false;
+        BackColor = Surface;
+        Font = new Font("Segoe UI", 9);
 
         var area = Screen.FromControl(owner).WorkingArea;
         int x = Math.Min(owner.Right + 15, area.Right - Width);
@@ -42,34 +46,52 @@ internal sealed class DocumentListForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 1
+            RowCount = 1,
+            Padding = new Padding(16)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var previewPanel = new Panel { Dock = DockStyle.Fill };
+        var previewPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
         previewPanel.Controls.Add(_viewer);
         previewPanel.Controls.Add(_status);
         previewPanel.Controls.Add(_fileName);
 
         _list.Font = new Font("Segoe UI", 10);
+        _list.BackColor = Color.White;
+        _list.BorderStyle = BorderStyle.FixedSingle;
         _list.DisplayMember = nameof(TemporarySigningDocument.FileName);
         foreach (var document in _documents)
             _list.Items.Add(document);
         _list.SelectedIndexChanged += (_, _) => SelectDocument();
 
-        var documentsPanel = new Panel { Dock = DockStyle.Fill };
+        var documentsPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
         documentsPanel.Controls.Add(_list);
         documentsPanel.Controls.Add(new Label
         {
             Text = "Documentos", Dock = DockStyle.Top, Height = 42,
             Padding = new Padding(12, 0, 0, 0), TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold)
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            BackColor = BrandTeal, ForeColor = Color.White
         });
         layout.Controls.Add(previewPanel, 0, 0);
         layout.Controls.Add(documentsPanel, 1, 0);
         Controls.Add(layout);
+
+        var header = new Panel { Dock = DockStyle.Top, Height = 76, BackColor = BrandTeal };
+        header.Controls.Add(new Label
+        {
+            Text = "Firmador CAL", AutoSize = true, Location = new Point(22, 13),
+            Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.White
+        });
+        header.Controls.Add(new Label
+        {
+            Text = $"{_documents.Count} documentos recibidos para firmar", AutoSize = true,
+            Location = new Point(24, 45), Font = new Font("Segoe UI", 9),
+            ForeColor = Color.FromArgb(222, 244, 240)
+        });
+        Controls.Add(header);
 
         if (_list.Items.Count > 0)
             _list.SelectedIndex = 0;

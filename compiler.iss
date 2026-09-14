@@ -1,5 +1,5 @@
 #define MyAppName "Firmador CAL"
-#define MyAppVersion "1.04"
+#define MyAppVersion "1.10"
 #define MyAppExeName "FirmadorPades.exe"
 
 [Setup]

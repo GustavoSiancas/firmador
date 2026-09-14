@@ -16,9 +16,9 @@ En la auditoría inicial no había un PDF afectado ni el nombre, versión o diag
 
 ## Flujo encontrado
 
-`Program` descarga el PDF → `CertificateForm` ofrece certificados de CurrentUser/My con clave privada y FIR en el subject → el usuario selecciona un certificado → `OrchestratorService` crea la apariencia → `PdfSignatureService.Sign` crea `PdfSigner` en append mode → `CertificateConverter.ToChain` construye la cadena Windows → `SignDetached(..., CADES)` crea el CMS → `X509Certificate2Signature.Sign` usa `GetRSAPrivateKey().SignData(SHA256, Pkcs1)` → se suben los mismos bytes devueltos por el firmador.
+`Program` obtiene recursos temporales y descarga los PDFs → `CertificateForm` ofrece certificados de CurrentUser/My con clave privada y FIR en el subject → el usuario selecciona un certificado y confirma el PIN → `TemporaryBatchSignatureService` firma y actualiza cada documento → `PdfSignatureService.Sign` crea `PdfSigner` en append mode → `CertificateConverter.ToChain` construye la cadena Windows → `CadesSignatureContainer` crea el CMS → el resultado se sube con el id original del documento.
 
-El flujo UI no usa `GetSigningCertificate()` (ese método sí lo usa la utilidad de prueba real). No se exporta la clave privada. `PdfPreparationService` no interviene en este flujo; la apariencia se incorpora antes de finalizar la firma. La descarga local guarda los mismos bytes firmados.
+El flujo UI no usa `GetSigningCertificate()` (ese método sí lo usa la utilidad de prueba real). No se exporta la clave privada. La marca roja de vista previa se genera en una copia separada y no interviene en los bytes que se firman.
 
 ## iText 7.2.5, comprobado en su código fuente
 

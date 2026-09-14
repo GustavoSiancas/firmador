@@ -50,8 +50,16 @@ public class PdfSignatureService
         PdfRectangle pageSize = document.GetPage(page).GetPageSize();
         float width = Math.Min(placement.Width, pageSize.GetWidth());
         float height = Math.Min(placement.Height, pageSize.GetHeight());
-        float x = Math.Clamp(placement.X, pageSize.GetLeft(), pageSize.GetRight() - width);
-        float y = Math.Clamp(placement.Y, pageSize.GetBottom(), pageSize.GetTop() - height);
+        const float signatureMargin = 20;
+        float defaultX = Math.Clamp(pageSize.GetRight() - width - signatureMargin,
+            pageSize.GetLeft(), pageSize.GetRight() - width);
+        float defaultY = Math.Clamp(pageSize.GetBottom() + signatureMargin,
+            pageSize.GetBottom(), pageSize.GetTop() - height);
+        bool fitsOnPage = float.IsFinite(placement.X) && float.IsFinite(placement.Y) &&
+            placement.X >= pageSize.GetLeft() && placement.X + width <= pageSize.GetRight() &&
+            placement.Y >= pageSize.GetBottom() && placement.Y + height <= pageSize.GetTop();
+        float x = fitsOnPage ? placement.X : defaultX;
+        float y = fitsOnPage ? placement.Y : defaultY;
 
         signer.GetSignatureAppearance()
             .SetReason(reason)

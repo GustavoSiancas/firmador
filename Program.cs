@@ -14,12 +14,6 @@ internal static class Program
 
         try
         {
-            if (args.Length == 1 && args[0] == "--batch-test")
-            {
-                Application.Run(new BatchSignatureForm());
-                return;
-            }
-
             var launchService = new LaunchService();
 
             LaunchParameters parameters =
@@ -50,24 +44,19 @@ internal static class Program
 
             Application.Run(new CertificateForm(new CertificateService(), apiService, documents));
         }
-#if DEBUG
+        catch (LaunchParameterException ex)
+        {
+            ShowError("Por favor contacte con soporte y actualice a la última versión de FirmaCAL.", ex);
+        }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                ex.ToString(),
-                "Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowError("Error en el sistema. Contacte a sistemas.", ex);
         }
-#else
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                ex.Message,
-                "Inicio no permitido",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-#endif
+    }
+
+    private static void ShowError(string message, Exception exception)
+    {
+        using var error = new ErrorDetailsForm(message, exception);
+        error.ShowDialog();
     }
 }

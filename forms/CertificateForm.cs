@@ -8,6 +8,9 @@ namespace FirmadorPades.Forms;
 
 public class CertificateForm : Form
 {
+    private static readonly Color BrandTeal = Color.FromArgb(20, 125, 106);
+    private static readonly Color BrandTealDark = Color.FromArgb(13, 93, 79);
+    private static readonly Color Surface = Color.FromArgb(244, 247, 251);
     private readonly CertificateService _certificateService;
     private readonly ApiService _apiService;
     private readonly IReadOnlyList<TemporarySigningDocument> _documents;
@@ -27,31 +30,39 @@ public class CertificateForm : Form
         _apiService = apiService;
         _documents = documents;
 
-        Text = "Firmador CAL - Versión 1.04";
+        Text = "Firmador CAL - Versión 1.10";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
-        Width = 560;
-        Height = 470;
-        BackColor = Color.FromArgb(244, 247, 251);
+        ClientSize = new Size(560, 360);
+        BackColor = Surface;
+        Font = new Font("Segoe UI", 9);
         StartPosition = FormStartPosition.Manual;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         Shown += (_, _) => PositionOnLeftSide();
 
-        Controls.Add(new Label
+        // Cabecera y superficie usan los mismos tonos de la identidad visual.
+        var header = new Panel
         {
-            Text = "Firmador CAL - Versión 1.04", AutoSize = true,
-            Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold)
+            BackColor = BrandTeal,
+            Location = Point.Empty,
+            Size = new Size(ClientSize.Width, 82)
+        };
+        header.Controls.Add(new Label
+        {
+            Text = "Firmador CAL", AutoSize = true,
+            Location = new Point(30, 16), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.White
         });
-        Controls.Add(new Label
+        header.Controls.Add(new Label
         {
             Text = "Elija el certificado digital que utilizará para firmar.", AutoSize = true,
-            Location = new Point(32, 56), Font = new Font("Segoe UI", 9)
+            Location = new Point(32, 48), Font = new Font("Segoe UI", 9), ForeColor = Color.FromArgb(222, 244, 240)
         });
+        Controls.Add(header);
 
         _certificates = new ListBox
         {
-            Left = 30, Top = 92, Width = ClientSize.Width - 60, Height = 245,
+            Left = 30, Top = 100, Width = ClientSize.Width - 60, Height = 166,
             Font = new Font("Segoe UI", 11), BackColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false,
             ItemHeight = 42, DrawMode = DrawMode.OwnerDrawFixed
@@ -62,24 +73,29 @@ public class CertificateForm : Form
 
         var documentsControl = new DocumentCountControl
         {
-            Location = new Point(_certificates.Right - 75, 12), Size = new Size(75, 68),
+            Location = new Point(header.ClientSize.Width - 95, 7), Size = new Size(75, 68),
+            BackColor = BrandTeal,
             DocumentCount = _documents.Count
         };
         documentsControl.Click += (_, _) => ShowDocuments();
-        Controls.Add(documentsControl);
+        header.Controls.Add(documentsControl);
 
-        _status.Location = new Point(30, _certificates.Bottom + 14);
+        _status.Location = new Point(30, _certificates.Bottom + 17);
         _status.AutoSize = true;
         _status.Text = $"{_documents.Count} documentos listos para firmar.";
+        _status.ForeColor = Color.FromArgb(84, 97, 110);
+        _status.Font = new Font("Segoe UI", 9);
         Controls.Add(_status);
 
         _sign.Text = "Firmar";
         _sign.Size = new Size(180, 42);
-        _sign.Location = new Point(_certificates.Right - _sign.Width, _certificates.Bottom + 10);
+        _sign.Location = new Point(_certificates.Right - _sign.Width, _certificates.Bottom + 12);
         _sign.Font = new Font("Segoe UI", 11, FontStyle.Bold);
         _sign.FlatStyle = FlatStyle.Flat;
         _sign.FlatAppearance.BorderSize = 0;
-        _sign.BackColor = Color.FromArgb(20, 125, 106);
+        _sign.BackColor = BrandTeal;
+        _sign.FlatAppearance.MouseOverBackColor = BrandTealDark;
+        _sign.FlatAppearance.MouseDownBackColor = BrandTealDark;
         _sign.ForeColor = Color.White;
         _sign.Click += SignDocuments;
         Controls.Add(_sign);
@@ -159,10 +175,11 @@ public class CertificateForm : Form
             return;
 
         bool selected = (e.State & DrawItemState.Selected) != 0;
-        e.Graphics.FillRectangle(selected ? Brushes.Gainsboro : Brushes.White, e.Bounds);
+        using var selectedBrush = new SolidBrush(Color.FromArgb(225, 243, 239));
+        e.Graphics.FillRectangle(selected ? selectedBrush : Brushes.White, e.Bounds);
         TextRenderer.DrawText(e.Graphics, _certificateService.GetHolderName(item.Certificate),
             _certificates.Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
-            Color.Black, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+            Color.FromArgb(32, 43, 54), TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         e.DrawFocusRectangle();
     }
 
@@ -192,7 +209,7 @@ public class CertificateForm : Form
 
         try
         {
-            IReadOnlyList<BatchSignatureResult> results;
+            IReadOnlyList<TemporarySignatureResult> results;
             using (pin)
             {
                 results = await new TemporaryBatchSignatureService().SignAndUploadAsync(
