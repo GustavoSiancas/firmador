@@ -40,7 +40,10 @@ public class PdfSignatureService
             new StampingProperties().UseAppendMode());
 
         PdfDocument document = signer.GetDocument();
-        int page = document.GetNumberOfPages();
+        int pageCount = document.GetNumberOfPages();
+        int page = placement.Page >= 1 && placement.Page <= pageCount
+            ? placement.Page
+            : pageCount;
         if (placement.Width <= 0 || placement.Height <= 0)
             throw new ArgumentOutOfRangeException(nameof(placement), "El tamaño de la firma debe ser mayor que cero.");
 

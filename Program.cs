@@ -25,47 +25,30 @@ internal static class Program
             LaunchParameters parameters =
                 launchService.GetLaunchParameters(args);
 
-            var certificateService = new CertificateService();
-
             var apiService = new ApiService(
-                parameters.InputEndpoint,
-                parameters.OutputEndpoint,
-                parameters.FileId,
+                parameters.SessionEndpoint,
                 parameters.Token);
 
-            var stampService =
-                new StampService();
+            IReadOnlyList<TemporarySigningDocument> documents;
+            try
+            {
+                _ = apiService.GetTemporaryResourcesAsync()
+                    .GetAwaiter()
+                    .GetResult();
 
-            var pdfSignatureService =
-                new PdfSignatureService();
+                documents = apiService.GetTemporaryDocumentsAsync()
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex) when (parameters.IsDevelopment)
+            {
+                throw new Exception(
+                    $"{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
+                    $"Solicitud enviada:{Environment.NewLine}{apiService.GetLastRequestCurl()}",
+                    ex);
+            }
 
-            var orchestratorService =
-                new OrchestratorService(
-                    stampService,
-                    pdfSignatureService,
-                    apiService);
-
-
-            byte[] pdfBytes = apiService.GetDocumentPdfAsync()
-                .GetAwaiter()
-                .GetResult();
-
-            if (parameters.Clean)
-                pdfBytes = new PdfCleaningService().Clean(pdfBytes);
-
-            Application.Run(
-                new CertificateForm(
-                    certificateService,
-                    orchestratorService,
-                    pdfBytes,
-                    new SignatureLocation
-                    {
-                        X = parameters.X,
-                        Y = parameters.Y,
-                        Width = 170,
-                        Height = 60
-                    },
-                    apiService.DocumentFileName));
+            Application.Run(new CertificateForm(new CertificateService(), documents));
         }
 #if DEBUG
         catch (Exception ex)

@@ -107,14 +107,13 @@ if (args.Length == 1)
     return;
 }
 
-const string launchUri = "firmaapp://sign?inputEndpoint=https%3A%2F%2Fexample.com%2Fin&outputEndpoint=https%3A%2F%2Fexample.com%2Fout&fileId=test&token=test";
-foreach (var (query, x, y) in new[] { ("", 50f, 20f), ("&X=125.5&Y=220.25", 125.5f, 220.25f), ("&x=0", 0f, 20f), ("&y=90", 50f, 90f) })
+const string launchUri = "firmaapp://sign?sessionEndpoint=https%3A%2F%2Fexample.com%2Fsession&token=test";
+var launchParameters = new LaunchService().GetLaunchParameters(new[] { launchUri });
+if (launchParameters.SessionEndpoint != new Uri("https://example.com/session") ||
+    launchParameters.Token != "test")
 {
-    var launch = new LaunchService().GetLaunchParameters(new[] { launchUri + query });
-    if (launch.X != x || launch.Y != y)
-        throw new Exception("Coordenadas de inicio incorrectas.");
+    throw new Exception("Parámetros de inicio de la sesión incorrectos.");
 }
-Console.WriteLine("Coordenadas de inicio y valores predeterminados correctos.");
 
 // Comprueba el renderizado con System.Drawing incluido en Windows Forms.
 byte[] resizedStamp = new StampService().CreateStamp("CN=PRUEBA FIR", "Prueba", 340, 120);
@@ -186,16 +185,6 @@ for (int expected = 1; expected <= 3; expected++)
             $"{signature.SignatureName} -> revisión {signature.Revision}/{signature.TotalRevisions}: válida={signature.IsValid}"));
     Console.WriteLine(report);
 }
-
-foreach (var (query, expectedClean) in new[] { ("", false), ("&clean=false", false), ("&clean=true", true), ("&clean=True", true), ("&clean=False", false) })
-{
-    if (new LaunchService().GetLaunchParameters(new[] { launchUri + query }).Clean != expectedClean)
-        throw new Exception("Valor de clean incorrecto.");
-}
-bool invalidCleanRejected = false;
-try { new LaunchService().GetLaunchParameters(new[] { launchUri + "&clean=invalid" }); }
-catch (ArgumentException) { invalidCleanRejected = true; }
-if (!invalidCleanRejected) throw new Exception("Se aceptó un clean inválido.");
 
 byte[] originalBytes = currentPdf.ToArray();
 byte[] cleanedPdf = new PdfCleaningService().Clean(currentPdf);

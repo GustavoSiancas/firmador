@@ -1,137 +1,85 @@
 using System.Security.Cryptography.X509Certificates;
-using System.Windows.Forms;
-using FirmadorPades.Services;
+using System.Security.Cryptography;
 using FirmadorPades.Models;
+using FirmadorPades.Services;
 
 namespace FirmadorPades.Forms;
 
 public class CertificateForm : Form
 {
     private readonly CertificateService _certificateService;
-    private readonly OrchestratorService _orchestratorService;
-
-    private readonly byte[] _documentBytes;
-    private readonly SignatureLocation _placement;
-
-    private readonly ListBox lstCertificates;
-
+    private readonly IReadOnlyList<TemporarySigningDocument> _documents;
+    private readonly ListBox _certificates;
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 200 };
-    private readonly Button btnSign;
-
-    private readonly List<CertificateItem> _items = new();
-
-    private bool _signatureCompleted;
-    private readonly string _documentFileName;
-    private DocumentPreviewForm? _previewForm;
+    private readonly List<CertificateItem> _items = [];
 
     public CertificateForm(
         CertificateService certificateService,
-        OrchestratorService orchestratorService,
-        byte[] documentBytes,
-        SignatureLocation placement,
-        string documentFileName = "documento.pdf")
+        IReadOnlyList<TemporarySigningDocument> documents)
     {
         _certificateService = certificateService;
-        _orchestratorService = orchestratorService;
-
-        _documentBytes = documentBytes;
-        _placement = placement;
-        _documentFileName = documentFileName;
+        _documents = documents;
 
         Text = "Firmador CAL - Versión 1.04";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
-
         Width = 560;
         Height = 470;
         BackColor = Color.FromArgb(244, 247, 251);
-
-        StartPosition = FormStartPosition.CenterScreen;
-
-        Shown += (_, _) =>
-        {
-            Left -= 200;
-        };
-
+        StartPosition = FormStartPosition.Manual;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
+        Shown += (_, _) => PositionOnLeftSide();
 
-        lstCertificates = new ListBox
+        Controls.Add(new Label
         {
-            Left = 30,
-            Top = 92,
-            Width = ClientSize.Width - 60,
-            Height = 245,
-            Font = new Font("Segoe UI", 11),
-            ForeColor = Color.Black,
-            BackColor = Color.White,
-            BorderStyle = BorderStyle.FixedSingle,
-            IntegralHeight = false,
-            ItemHeight = 42,
-            DrawMode = DrawMode.OwnerDrawFixed
-        };
-        lstCertificates.DrawItem += LstCertificates_DrawItem;
-
-        btnSign = new Button
+            Text = "Firmador CAL - Versión 1.04", AutoSize = true,
+            Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold)
+        });
+        Controls.Add(new Label
         {
-            Text = "Firmar",
-            Width = 180,
-            Height = 45,
-            Left = lstCertificates.Right - 180,
-            Top = lstCertificates.Bottom + 24,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold),
-            Cursor = Cursors.Hand,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(20, 125, 106),
-            ForeColor = Color.White
-        };
+            Text = "Elija el certificado digital que utilizará para firmar.", AutoSize = true,
+            Location = new Point(32, 56), Font = new Font("Segoe UI", 9)
+        });
 
-        btnSign.FlatAppearance.BorderSize = 0;
-        btnSign.Click += BtnSign_Click;
-        AcceptButton = btnSign;
-
-        Controls.Add(new Label { Text = "Firmador CAL - Versión 1.04", AutoSize = true, Location = new Point(30, 25), Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.Black });
-        Controls.Add(new Label { Text = "Elija el certificado que utilizará para firmar este documento.", AutoSize = true, Location = new Point(32, 56), Font = new Font("Segoe UI", 9), ForeColor = Color.Black });
-        var documents = new DocumentCountControl
+        _certificates = new ListBox
         {
-            Location = new Point(lstCertificates.Right - 75, 12),
-            Size = new Size(75, 68),
-            DocumentCount = _documentBytes.Length > 0 ? 1 : 0
+            Left = 30, Top = 92, Width = ClientSize.Width - 60, Height = 245,
+            Font = new Font("Segoe UI", 11), BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false,
+            ItemHeight = 42, DrawMode = DrawMode.OwnerDrawFixed
         };
-        documents.Click += (_, _) => ShowDocumentPreview();
-        Controls.Add(documents);
-        Controls.Add(lstCertificates);
-        Controls.Add(btnSign);
+        _certificates.DrawItem += DrawCertificate;
+        Controls.Add(_certificates);
+
+        var documentsControl = new DocumentCountControl
+        {
+            Location = new Point(_certificates.Right - 75, 12), Size = new Size(75, 68),
+            DocumentCount = _documents.Count
+        };
+        documentsControl.Click += (_, _) => ShowDocuments();
+        Controls.Add(documentsControl);
 
         _refreshTimer.Tick += (_, _) => LoadCertificates();
-        Load += CertificateForm_Load;
-
-    }
-
-    private void ShowDocumentPreview()
-    {
-        if (_documentBytes.Length == 0)
-            return;
-
-        if (_previewForm is { IsDisposed: false })
+        Load += (_, _) =>
         {
-            _previewForm.Activate();
-            return;
-        }
-
-        _previewForm = new DocumentPreviewForm(
-            _documentBytes,
-            _documentFileName,
-            this
-        );
-
-        _previewForm.Show(this);
+            LoadCertificates();
+            _refreshTimer.Start();
+        };
     }
 
-    private void CertificateForm_Load(object? sender, EventArgs e)
+    private void ShowDocuments()
     {
-        LoadCertificates();
-        _refreshTimer.Start();
+        using var list = new DocumentListForm(_documents, this);
+        list.ShowDialog(this);
+    }
+
+    private void PositionOnLeftSide()
+    {
+        const int leftMargin = 80;
+        var area = Screen.FromControl(this).WorkingArea;
+        int y = area.Top + (area.Height - Height) / 2;
+        Location = new Point(area.Left + leftMargin, Math.Max(area.Top, y));
     }
 
     private void LoadCertificates()
@@ -141,45 +89,55 @@ public class CertificateForm : Form
         {
             certificates = _certificateService.GetAllCertificates();
         }
-        catch (System.Security.Cryptography.CryptographicException)
+        catch (CryptographicException)
         {
-            // El almacen puede estar temporalmente inaccesible al retirar el dispositivo.
-            certificates = new();
+            certificates = [];
         }
 
         if (_items.Select(item => item.Certificate.Thumbprint)
             .SequenceEqual(certificates.Select(cert => cert.Thumbprint)))
         {
-            foreach (var cert in certificates)
-                cert.Dispose();
-            btnSign.Enabled = lstCertificates.SelectedItem is CertificateItem;
+            foreach (var certificate in certificates)
+                certificate.Dispose();
             return;
         }
 
-        string? selected = (lstCertificates.SelectedItem as CertificateItem)?.Certificate.Thumbprint;
-        lstCertificates.BeginUpdate();
+        string? selected = (_certificates.SelectedItem as CertificateItem)?.Certificate.Thumbprint;
+        _certificates.BeginUpdate();
         try
         {
-            lstCertificates.Items.Clear();
+            _certificates.Items.Clear();
             foreach (var item in _items)
                 item.Certificate.Dispose();
             _items.Clear();
 
-            foreach (var cert in certificates)
+            foreach (var certificate in certificates)
             {
-                var item = new CertificateItem(cert);
+                var item = new CertificateItem(certificate);
                 _items.Add(item);
-                lstCertificates.Items.Add(item);
+                _certificates.Items.Add(item);
             }
 
             int selectedIndex = _items.FindIndex(item => item.Certificate.Thumbprint == selected);
-            lstCertificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
-            btnSign.Enabled = lstCertificates.SelectedItem is CertificateItem;
+            _certificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
         }
         finally
         {
-            lstCertificates.EndUpdate();
+            _certificates.EndUpdate();
         }
+    }
+
+    private void DrawCertificate(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || _certificates.Items[e.Index] is not CertificateItem item)
+            return;
+
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        e.Graphics.FillRectangle(selected ? Brushes.Gainsboro : Brushes.White, e.Bounds);
+        TextRenderer.DrawText(e.Graphics, _certificateService.GetHolderName(item.Certificate),
+            _certificates.Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
+            Color.Black, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+        e.DrawFocusRectangle();
     }
 
     protected override void Dispose(bool disposing)
@@ -189,99 +147,12 @@ public class CertificateForm : Form
             _refreshTimer.Dispose();
             foreach (var item in _items)
                 item.Certificate.Dispose();
-            _items.Clear();
         }
         base.Dispose(disposing);
     }
 
-    private class CertificateItem
+    private sealed class CertificateItem(X509Certificate2 certificate)
     {
-        public X509Certificate2 Certificate { get; }
-
-        public CertificateItem(
-            X509Certificate2 certificate)
-        {
-            Certificate = certificate;
-        }
-    }
-
-    private async void BtnSign_Click(
-        object? sender,
-        EventArgs e)
-    {
-        if (lstCertificates.SelectedItem is not CertificateItem item)
-        {
-            MessageBox.Show(
-                "Seleccione un certificado.",
-                "Firmador CAL",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-
-            return;
-        }
-
-        btnSign.Enabled = false;
-        btnSign.Text = "Firmando...";
-        _refreshTimer.Stop();
-        lstCertificates.Enabled = false;
-
-        Cursor = Cursors.WaitCursor;
-
-        try
-        {
-            const string reason = "Documento firmado digitalmente";
-
-            byte[] signedPdf = await _orchestratorService.SignDocumentAsync(
-                    _documentBytes,
-                    reason,
-                    item.Certificate,
-                    _placement);
-
-            _signatureCompleted = true;
-            Cursor = Cursors.Default;
-
-            using var resultForm = new SignatureSuccessForm(signedPdf);
-            resultForm.ShowDialog(this);
-            Application.Exit();
-        }
-        catch (Exception ex)
-        {
-            Cursor = Cursors.Default;
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Error al firmar",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-        finally
-        {
-            Cursor = Cursors.Default;
-            if (!IsDisposed && !Disposing && !_signatureCompleted)
-            {
-                btnSign.Text = "Firmar";
-                lstCertificates.Enabled = true;
-                LoadCertificates();
-                _refreshTimer.Start();
-            }
-        }
-    }
-
-    private void LstCertificates_DrawItem(object? sender, DrawItemEventArgs e)
-    {
-        if (e.Index < 0 || lstCertificates.Items[e.Index] is not CertificateItem item)
-            return;
-
-        bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-        e.Graphics.FillRectangle(selected ? Brushes.Gainsboro : Brushes.White, e.Bounds);
-        TextRenderer.DrawText(
-            e.Graphics,
-            _certificateService.GetHolderName(item.Certificate),
-            lstCertificates.Font,
-            new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
-            Color.Black,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
-        e.DrawFocusRectangle();
+        public X509Certificate2 Certificate { get; } = certificate;
     }
 }
-

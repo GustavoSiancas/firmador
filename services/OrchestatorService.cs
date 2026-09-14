@@ -39,10 +39,8 @@ public class OrchestratorService
             stamp,
             placement);
 
-        // 3. Subir PDF firmado
-        await _apiService.UpdateDocumentAsync(signedPdf);
-
-        return signedPdf;
+        return await Task.FromException<byte[]>(new NotSupportedException(
+            "La carga se implementará cuando se defina el uso de outputEndpoint."));
     }
 
 }
