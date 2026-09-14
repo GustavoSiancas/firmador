@@ -101,7 +101,8 @@ public class ApiService
         form.Add(fileContent, "file", "documento-firmado.pdf");
         form.Add(new StringContent(documentId), "fileId");
 
-        using var response = await _apiClient.PutAsync(GetTemporaryResources().OutputEndpoint, form);
+        // El endpoint de salida recibe el id original y el PDF firmado por multipart POST.
+        using var response = await _apiClient.PostAsync(GetTemporaryResources().OutputEndpoint, form);
         string responseBody = await response.Content.ReadAsStringAsync();
 
         if (!response.IsSuccessStatusCode)
@@ -137,6 +138,7 @@ public class ApiService
     {
         const float signatureWidth = 170;
         const float signatureHeight = 60;
+        const float signatureMargin = 20;
 
         using var stream = new MemoryStream(pdfBytes, writable: false);
         using var pdf = new PdfDocument(new PdfReader(stream));
@@ -151,8 +153,8 @@ public class ApiService
         float width = Math.Min(signatureWidth, pageSize.GetWidth());
         float height = Math.Min(signatureHeight, pageSize.GetHeight());
 
-        float x = resource.X ?? pageSize.GetRight() - width;
-        float y = resource.Y ?? pageSize.GetBottom();
+        float x = resource.X ?? pageSize.GetRight() - width - signatureMargin;
+        float y = resource.Y ?? pageSize.GetBottom() + signatureMargin;
 
         return new SignatureLocation
         {

@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
+using System.Security;
 using FirmadorPades.Models;
 using FirmadorPades.Services;
 
@@ -8,16 +9,22 @@ namespace FirmadorPades.Forms;
 public class CertificateForm : Form
 {
     private readonly CertificateService _certificateService;
+    private readonly ApiService _apiService;
     private readonly IReadOnlyList<TemporarySigningDocument> _documents;
     private readonly ListBox _certificates;
+    private readonly Button _sign = new();
+    private readonly Label _status = new();
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 200 };
     private readonly List<CertificateItem> _items = [];
+    private bool _signing;
 
     public CertificateForm(
         CertificateService certificateService,
+        ApiService apiService,
         IReadOnlyList<TemporarySigningDocument> documents)
     {
         _certificateService = certificateService;
+        _apiService = apiService;
         _documents = documents;
 
         Text = "Firmador CAL - Versión 1.04";
@@ -50,6 +57,7 @@ public class CertificateForm : Form
             ItemHeight = 42, DrawMode = DrawMode.OwnerDrawFixed
         };
         _certificates.DrawItem += DrawCertificate;
+        _certificates.SelectedIndexChanged += (_, _) => UpdateSignButton();
         Controls.Add(_certificates);
 
         var documentsControl = new DocumentCountControl
@@ -60,11 +68,28 @@ public class CertificateForm : Form
         documentsControl.Click += (_, _) => ShowDocuments();
         Controls.Add(documentsControl);
 
+        _status.Location = new Point(30, _certificates.Bottom + 14);
+        _status.AutoSize = true;
+        _status.Text = $"{_documents.Count} documentos listos para firmar.";
+        Controls.Add(_status);
+
+        _sign.Text = "Firmar";
+        _sign.Size = new Size(180, 42);
+        _sign.Location = new Point(_certificates.Right - _sign.Width, _certificates.Bottom + 10);
+        _sign.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        _sign.FlatStyle = FlatStyle.Flat;
+        _sign.FlatAppearance.BorderSize = 0;
+        _sign.BackColor = Color.FromArgb(20, 125, 106);
+        _sign.ForeColor = Color.White;
+        _sign.Click += SignDocuments;
+        Controls.Add(_sign);
+
         _refreshTimer.Tick += (_, _) => LoadCertificates();
         Load += (_, _) =>
         {
             LoadCertificates();
             _refreshTimer.Start();
+            UpdateSignButton();
         };
     }
 
@@ -120,6 +145,7 @@ public class CertificateForm : Form
 
             int selectedIndex = _items.FindIndex(item => item.Certificate.Thumbprint == selected);
             _certificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
+            UpdateSignButton();
         }
         finally
         {
@@ -138,6 +164,60 @@ public class CertificateForm : Form
             _certificates.Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
             Color.Black, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         e.DrawFocusRectangle();
+    }
+
+    private void UpdateSignButton() =>
+        _sign.Enabled = !_signing && _documents.Count > 0 && _certificates.SelectedItem is CertificateItem;
+
+    private async void SignDocuments(object? sender, EventArgs e)
+    {
+        if (_signing || _certificates.SelectedItem is not CertificateItem item)
+            return;
+
+        SecureString pin;
+        using (var pinForm = new BatchPinForm(_documents.Count))
+        {
+            if (pinForm.ShowDialog(this) != DialogResult.OK)
+                return;
+            pin = pinForm.CopyPin();
+        }
+
+        _signing = true;
+        _refreshTimer.Stop();
+        _certificates.Enabled = false;
+        _sign.Enabled = false;
+        _status.Text = $"Firmando 0 / {_documents.Count}...";
+        var progress = new Progress<int>(count => _status.Text = $"Firmando {count} / {_documents.Count}...");
+        var signingStatus = new Progress<string>(message => _status.Text = message);
+
+        try
+        {
+            IReadOnlyList<BatchSignatureResult> results;
+            using (pin)
+            {
+                results = await new TemporaryBatchSignatureService().SignAndUploadAsync(
+                    _documents, item.Certificate, _apiService, pin, progress, signingStatus);
+            }
+
+            Hide();
+            using var report = new BatchSignatureResultsForm(results);
+            report.ShowDialog();
+            Application.Exit();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Error al firmar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (!IsDisposed && !Disposing)
+            {
+                _signing = false;
+                _certificates.Enabled = true;
+                _refreshTimer.Start();
+                UpdateSignButton();
+            }
+        }
     }
 
     protected override void Dispose(bool disposing)

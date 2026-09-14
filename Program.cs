@@ -48,7 +48,7 @@ internal static class Program
                     ex);
             }
 
-            Application.Run(new CertificateForm(new CertificateService(), documents));
+            Application.Run(new CertificateForm(new CertificateService(), apiService, documents));
         }
 #if DEBUG
         catch (Exception ex)
