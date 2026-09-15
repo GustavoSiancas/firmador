@@ -12,6 +12,19 @@ if (args.Length == 2 && args[0] == "--audit-cms")
     return;
 }
 
+if (args.Length == 1 && args[0] == "--list-smart-card")
+{
+    using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+    var certificates = new CertificateService().GetAllCertificates();
+    foreach (var cardCertificate in certificates)
+    {
+        using var cardRsa = cardCertificate.GetRSAPrivateKey();
+        Console.WriteLine($"{cardCertificate.Subject} | privada={cardCertificate.HasPrivateKey} | rsa={cardRsa is not null}");
+        cardCertificate.Dispose();
+    }
+    return;
+}
+
 if (args.Length == 3 && args[0] == "--sign-once-real")
 {
     byte[] inputPdf = File.ReadAllBytes(args[1]);

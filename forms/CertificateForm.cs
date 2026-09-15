@@ -16,6 +16,7 @@ public class CertificateForm : Form
     private readonly IReadOnlyList<TemporarySigningDocument> _documents;
     private readonly ListBox _certificates;
     private readonly Button _sign = new();
+    private readonly Button _refresh = new();
     private readonly Label _status = new();
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 200 };
     private readonly List<CertificateItem> _items = [];
@@ -30,9 +31,9 @@ public class CertificateForm : Form
         _apiService = apiService;
         _documents = documents;
 
-        Text = "Firmador CAL - Versión 1.10";
+        Text = "Firmador CAL - Versión 1.11";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
-        ClientSize = new Size(560, 360);
+        ClientSize = new Size(560, 390);
         BackColor = Surface;
         Font = new Font("Segoe UI", 9);
         StartPosition = FormStartPosition.Manual;
@@ -80,7 +81,7 @@ public class CertificateForm : Form
         documentsControl.Click += (_, _) => ShowDocuments();
         header.Controls.Add(documentsControl);
 
-        _status.Location = new Point(30, _certificates.Bottom + 17);
+        _status.Location = new Point(30, _certificates.Bottom + 67);
         _status.AutoSize = true;
         _status.Text = $"{_documents.Count} documentos listos para firmar.";
         _status.ForeColor = Color.FromArgb(84, 97, 110);
@@ -99,6 +100,16 @@ public class CertificateForm : Form
         _sign.ForeColor = Color.White;
         _sign.Click += SignDocuments;
         Controls.Add(_sign);
+
+        _refresh.Text = "Actualizar certificados";
+        _refresh.Size = new Size(180, 42);
+        _refresh.Location = new Point(30, _certificates.Bottom + 12);
+        _refresh.FlatStyle = FlatStyle.Flat;
+        _refresh.FlatAppearance.BorderColor = BrandTeal;
+        _refresh.ForeColor = BrandTeal;
+        _refresh.BackColor = Color.White;
+        _refresh.Click += (_, _) => LoadCertificates();
+        Controls.Add(_refresh);
 
         _refreshTimer.Tick += (_, _) => LoadCertificates();
         Load += (_, _) =>
@@ -140,6 +151,8 @@ public class CertificateForm : Form
         {
             foreach (var certificate in certificates)
                 certificate.Dispose();
+            if (_items.Count == 0 && !_signing)
+                _status.Text = "Windows no expone un certificado RSA con clave privada. Verifique el middleware, lector y DNIe.";
             return;
         }
 
@@ -161,6 +174,8 @@ public class CertificateForm : Form
 
             int selectedIndex = _items.FindIndex(item => item.Certificate.Thumbprint == selected);
             _certificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
+            if (_items.Count == 0 && !_signing)
+                _status.Text = "Windows no expone un certificado RSA con clave privada. Verifique el middleware, lector y DNIe.";
             UpdateSignButton();
         }
         finally
@@ -177,7 +192,8 @@ public class CertificateForm : Form
         bool selected = (e.State & DrawItemState.Selected) != 0;
         using var selectedBrush = new SolidBrush(Color.FromArgb(225, 243, 239));
         e.Graphics.FillRectangle(selected ? selectedBrush : Brushes.White, e.Bounds);
-        TextRenderer.DrawText(e.Graphics, _certificateService.GetHolderName(item.Certificate),
+        string label = $"{_certificateService.GetHolderName(item.Certificate)} — {_certificateService.GetCertificatePurpose(item.Certificate)}";
+        TextRenderer.DrawText(e.Graphics, label,
             _certificates.Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
             Color.FromArgb(32, 43, 54), TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         e.DrawFocusRectangle();
@@ -202,6 +218,7 @@ public class CertificateForm : Form
         _signing = true;
         _refreshTimer.Stop();
         _certificates.Enabled = false;
+        _refresh.Enabled = false;
         _sign.Enabled = false;
         _status.Text = $"Firmando 0 / {_documents.Count}...";
         var progress = new Progress<int>(count => _status.Text = $"Firmando {count} / {_documents.Count}...");
@@ -231,6 +248,7 @@ public class CertificateForm : Form
             {
                 _signing = false;
                 _certificates.Enabled = true;
+                _refresh.Enabled = true;
                 _refreshTimer.Start();
                 UpdateSignButton();
             }

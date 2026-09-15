@@ -11,12 +11,29 @@ public class CertificateService
 
         store.Open(OpenFlags.ReadOnly);
 
-        return store.Certificates
+        var certificates = store.Certificates
             .Cast<X509Certificate2>()
-            .Where(cert =>
-                cert.HasPrivateKey &&
-                cert.Subject.Contains("FIR", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(cert => GetHolderName(cert))
+            // Los certificados renovados de DNIe 1.0/2.0 pueden no incluir
+            // "FIR" en el Subject. Windows informa la disponibilidad real de
+            // la clave mediante el CSP/KSP del middleware instalado.
+            .Where(HasUsableRsaPrivateKey)
+            .Where(cert => !IsLocalDevelopmentCertificate(cert))
+            .ToList();
+
+        certificates.AddRange(Pkcs11SigningSession.GetTokenCertificates());
+        certificates.AddRange(CspSmartCardCertificateService.GetCertificates());
+
+        var uniqueCertificates = new List<X509Certificate2>();
+        foreach (var group in certificates.GroupBy(cert => Convert.ToHexString(cert.RawData), StringComparer.Ordinal))
+        {
+            uniqueCertificates.Add(group.First());
+            foreach (var duplicate in group.Skip(1))
+                duplicate.Dispose();
+        }
+
+        return uniqueCertificates
+            .OrderByDescending(IsExplicitSigningCertificate)
+            .ThenBy(GetHolderName)
             .ToList();
     }
 
@@ -57,5 +74,33 @@ public class CertificateService
 
         return simpleName;
     }
+
+    public string GetCertificatePurpose(X509Certificate2 cert) =>
+        IsExplicitSigningCertificate(cert) ? "Certificado de firma" : "Certificado RSA";
+
+    private static bool HasUsableRsaPrivateKey(X509Certificate2 cert)
+    {
+        if (!cert.HasPrivateKey)
+            return false;
+
+        try
+        {
+            using RSA? rsa = cert.GetRSAPrivateKey();
+            return rsa is not null;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsExplicitSigningCertificate(X509Certificate2 cert) =>
+        cert.Extensions
+            .OfType<X509KeyUsageExtension>()
+            .Any(extension => extension.KeyUsages.HasFlag(X509KeyUsageFlags.NonRepudiation)) ||
+        cert.Subject.Contains("FIR", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLocalDevelopmentCertificate(X509Certificate2 cert) =>
+        cert.Subject.Contains("CN=localhost", StringComparison.OrdinalIgnoreCase);
 
 }

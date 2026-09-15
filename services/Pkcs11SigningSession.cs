@@ -62,12 +62,14 @@ internal sealed class Pkcs11SigningSession : IExternalSignature, IDisposable
                     try { _alwaysAuthenticate = !attributes[0].CannotBeRead && attributes[0].GetValueAsBool(); }
                     finally { foreach (var attribute in attributes) attribute.Dispose(); }
                     if (!slot.GetMechanismList().Contains(CKM.CKM_RSA_PKCS))
-                        throw new CryptographicException("El DNIe no ofrece el mecanismo RSA PKCS#1 requerido.");
+                        throw new DniePkcs11IncompatibleTokenException(
+                            "El DNIe no ofrece el mecanismo PKCS#11 RSA requerido.");
                     return;
                 }
                 finally { if (!selected) session.Dispose(); }
             }
-            throw new CryptographicException("IDEMIA no encontró el certificado seleccionado en el DNIe. Conecte la tarjeta y actualice los certificados.");
+            throw new DniePkcs11IncompatibleTokenException(
+                "El módulo PKCS#11 de IDEMIA no reconoce el certificado seleccionado.");
         }
         catch { Dispose(); throw; }
     }
@@ -101,6 +103,55 @@ internal sealed class Pkcs11SigningSession : IExternalSignature, IDisposable
                 if (FindCertificateId(session, certificate) is not null) matches++;
         }
         return matches;
+    }
+
+    // Algunos middleware de DNIe no publican el certificado en CurrentUser\\My.
+    // ReFirma lo encuentra consultando el token; hacemos lo mismo para poder
+    // mostrarlo y seleccionarlo antes de crear la sesiÃ³n de firma.
+    internal static List<X509Certificate2> GetTokenCertificates()
+    {
+        try
+        {
+            var factories = new Pkcs11InteropFactories();
+            using var library = factories.Pkcs11LibraryFactory.LoadPkcs11Library(
+                factories, LibraryPath, AppType.MultiThreaded);
+            var certificates = new List<X509Certificate2>();
+
+            foreach (var slot in library.GetSlotList(SlotsType.WithTokenPresent))
+            {
+                using var session = slot.OpenSession(SessionType.ReadOnly);
+                using var certificateClass = session.Factories.ObjectAttributeFactory
+                    .Create(CKA.CKA_CLASS, CKO.CKO_CERTIFICATE);
+
+                foreach (var handle in session.FindAllObjects(new List<IObjectAttribute> { certificateClass }))
+                {
+                    var attributes = session.GetAttributeValue(handle, new List<CKA> { CKA.CKA_VALUE });
+                    try
+                    {
+                        if (!attributes[0].CannotBeRead)
+                        {
+                            var certificate = new X509Certificate2(attributes[0].GetValueAsByteArray());
+                            using var rsa = certificate.GetRSAPublicKey();
+                            if (rsa is not null)
+                                certificates.Add(certificate);
+                            else
+                                certificate.Dispose();
+                        }
+                    }
+                    catch (CryptographicException)
+                    {
+                        // Un objeto que no es un certificado X.509 utilizable.
+                    }
+                    finally { foreach (var attribute in attributes) attribute.Dispose(); }
+                }
+            }
+
+            return certificates;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException or Pkcs11Exception)
+        {
+            return [];
+        }
     }
 
     public string GetHashAlgorithm() => DigestAlgorithms.SHA256;
