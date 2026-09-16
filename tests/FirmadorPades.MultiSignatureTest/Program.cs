@@ -12,16 +12,35 @@ if (args.Length == 2 && args[0] == "--audit-cms")
     return;
 }
 
+if (args.Length == 1 && args[0] == "--read-dnie")
+{
+    var certificates = DniePcscCertificateService.GetCertificates(out string? diagnostic);
+    foreach (var dnieCertificate in certificates)
+    {
+        Console.WriteLine($"DNIe 2.0 PC/SC: {dnieCertificate.Subject} | vence={dnieCertificate.NotAfter:yyyy-MM-dd} | huella={dnieCertificate.Thumbprint}");
+        dnieCertificate.Dispose();
+    }
+    if (certificates.Count == 0) throw new Exception(diagnostic ?? "No se encontró un DNIe 2.0 compatible.");
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--test-dnie")
+{
+    DniePcscTests.Run();
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--list-smart-card")
 {
-    using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-    var certificates = new CertificateService().GetAllCertificates();
+    var service = new CertificateService();
+    var certificates = service.GetAllCertificates();
     foreach (var cardCertificate in certificates)
     {
-        using var cardRsa = cardCertificate.GetRSAPrivateKey();
-        Console.WriteLine($"{cardCertificate.Subject} | privada={cardCertificate.HasPrivateKey} | rsa={cardRsa is not null}");
+        Console.WriteLine($"{cardCertificate.Subject} | PC/SC={DniePcscCertificateService.TryGetReader(cardCertificate, out _)} | privadaWindows={cardCertificate.HasPrivateKey}");
         cardCertificate.Dispose();
     }
+    if (service.LastDetectionDiagnostic is not null) Console.WriteLine(service.LastDetectionDiagnostic);
+    Console.WriteLine($"Presencia PC/SC: {CertificateService.GetReaderSnapshot()}");
     return;
 }
 
@@ -30,6 +49,8 @@ if (args.Length == 3 && args[0] == "--sign-once-real")
     byte[] inputPdf = File.ReadAllBytes(args[1]);
     var certificateService = new CertificateService();
     using X509Certificate2 signingCertificate = certificateService.GetSigningCertificate();
+    using var realSinglePin = ReadSigningPin();
+    using var realSingleSession = SigningSession.Open(signingCertificate, realSinglePin);
     var stampService = new StampService();
     var realSingleSigner = new PdfSignatureService();
     var realSingleValidator = new PdfValidationService();
@@ -44,7 +65,7 @@ if (args.Length == 3 && args[0] == "--sign-once-real")
         reason,
         signingCertificate,
         stampService.CreateStamp(signingCertificate.Subject, reason),
-        new SignatureLocation { Page = 1, X = 50, Y = 20, Width = 170, Height = 60 });
+        new SignatureLocation { Page = 1, X = 50, Y = 20, Width = 170, Height = 60 }, realSingleSession);
 
     var signaturesAfter = realSingleValidator.GetSignatures(signedPdf);
     CmsAudit.Verify(signedPdf);
@@ -68,6 +89,8 @@ if (args.Length == 3 && args[0] == "--double-sign-real")
     byte[] realCurrentPdf = File.ReadAllBytes(args[1]);
     var certificateService = new CertificateService();
     using X509Certificate2 realCertificate = certificateService.GetSigningCertificate();
+    using var realDoublePin = ReadSigningPin();
+    using var realDoubleSession = SigningSession.Open(realCertificate, realDoublePin);
     var stampService = new StampService();
     var pdfSigner = new PdfSignatureService();
     var realValidator = new PdfValidationService();
@@ -77,14 +100,14 @@ if (args.Length == 3 && args[0] == "--double-sign-real")
 
     realCurrentPdf = pdfSigner.Sign(
         realCurrentPdf, reason, realCertificate,
-        stampService.CreateStamp(realCertificate.Subject, reason), firstPlacement);
+        stampService.CreateStamp(realCertificate.Subject, reason), firstPlacement, realDoubleSession);
     var firstValidation = realValidator.GetSignatures(realCurrentPdf);
     Console.WriteLine($"Después de Signature1: {string.Join(", ", firstValidation.Select(s => $"{s.SignatureName}={s.IsValid}"))}");
     if (firstValidation.Any(s => !s.IsValid)) throw new Exception("La primera firma no superó la validación local.");
 
     realCurrentPdf = pdfSigner.Sign(
         realCurrentPdf, reason, realCertificate,
-        stampService.CreateStamp(realCertificate.Subject, reason), secondPlacement);
+        stampService.CreateStamp(realCertificate.Subject, reason), secondPlacement, realDoubleSession);
     var secondValidation = realValidator.GetSignatures(realCurrentPdf);
     Console.WriteLine($"Después de Signature2: {string.Join(", ", secondValidation.Select(s => $"{s.SignatureName}={s.IsValid}, rev={s.Revision}/{s.TotalRevisions}"))}");
     if (secondValidation.Count != 2 || secondValidation.Any(s => !s.IsValid))
@@ -121,6 +144,7 @@ if (args.Length == 1)
 }
 
 const string launchUri = "firmaapp://sign?sessionEndpoint=https%3A%2F%2Fexample.com%2Fsession&token=test";
+DniePcscTests.Run();
 var launchParameters = new LaunchService().GetLaunchParameters(new[] { launchUri });
 if (launchParameters.SessionEndpoint != new Uri("https://example.com/session") ||
     launchParameters.Token != "test")
@@ -183,9 +207,9 @@ for (int expected = 1; expected <= 3; expected++)
         var field = iText.Forms.PdfAcroForm.GetAcroForm(signedDocument, false).GetField($"Signature{expected}");
         var widget = field.GetWidgets()[0];
         var rectangle = widget.GetRectangle().ToRectangle();
-        if (!widget.GetPage().GetPdfObject().Equals(signedDocument.GetLastPage().GetPdfObject()) ||
+        if (!widget.GetPage().GetPdfObject().Equals(signedDocument.GetPage(placement.Page).GetPdfObject()) ||
             rectangle.GetX() != placement.X || rectangle.GetY() != placement.Y)
-            throw new Exception("El sello no está en las coordenadas de la última página.");
+            throw new Exception("El sello no está en las coordenadas de la página seleccionada.");
     }
     var signatures = validator.GetSignatures(currentPdf);
 
@@ -305,4 +329,26 @@ static byte[] CreatePdf()
     document.Add(new Paragraph("Última página para los sellos"));
     document.Close();
     return output.ToArray();
+}
+
+static System.Security.SecureString ReadSigningPin()
+{
+    if (Console.IsInputRedirected) throw new InvalidOperationException("Ingrese el PIN en una consola interactiva, no por argumentos ni archivos.");
+    Console.Write("PIN de firma (entrada oculta): ");
+    var pin = new System.Security.SecureString();
+    try
+    {
+        while (true)
+        {
+            var input = Console.ReadKey(intercept: true);
+            if (input.Key == ConsoleKey.Escape) throw new OperationCanceledException("Firma cancelada.");
+            if (input.Key == ConsoleKey.Enter) break;
+            if (input.Key == ConsoleKey.Backspace && pin.Length > 0) pin.RemoveAt(pin.Length - 1);
+            else if (!char.IsControl(input.KeyChar) && pin.Length < 64) pin.AppendChar(input.KeyChar);
+        }
+        Console.WriteLine();
+        pin.MakeReadOnly();
+        return pin;
+    }
+    catch { pin.Dispose(); throw; }
 }

@@ -18,9 +18,12 @@ public class CertificateForm : Form
     private readonly Button _sign = new();
     private readonly Button _refresh = new();
     private readonly Label _status = new();
-    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 200 };
+    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 5000 };
     private readonly List<CertificateItem> _items = [];
     private bool _signing;
+    private bool _loading;
+    private bool _checkingPresence;
+    private string? _readerSnapshot;
 
     public CertificateForm(
         CertificateService certificateService,
@@ -83,6 +86,7 @@ public class CertificateForm : Form
 
         _status.Location = new Point(30, _certificates.Bottom + 67);
         _status.AutoSize = true;
+        _status.MaximumSize = new Size(ClientSize.Width - 60, 60);
         _status.Text = $"{_documents.Count} documentos listos para firmar.";
         _status.ForeColor = Color.FromArgb(84, 97, 110);
         _status.Font = new Font("Segoe UI", 9);
@@ -111,13 +115,14 @@ public class CertificateForm : Form
         _refresh.Click += (_, _) => LoadCertificates();
         Controls.Add(_refresh);
 
-        _refreshTimer.Tick += (_, _) => LoadCertificates();
+        _refreshTimer.Tick += (_, _) => RefreshIfCardChanged();
         Load += (_, _) =>
         {
             LoadCertificates();
             _refreshTimer.Start();
             UpdateSignButton();
         };
+        FormClosing += (_, e) => { if (_signing) e.Cancel = true; };
     }
 
     private void ShowDocuments()
@@ -134,25 +139,74 @@ public class CertificateForm : Form
         Location = new Point(area.Left + leftMargin, Math.Max(area.Top, y));
     }
 
-    private void LoadCertificates()
+    private async void LoadCertificates()
     {
-        List<X509Certificate2> certificates;
+        if (_loading || _signing || IsDisposed || Disposing) return;
+        _loading = true;
+        _refresh.Enabled = false;
+        UpdateSignButton();
         try
         {
-            certificates = _certificateService.GetAllCertificates();
+            var (certificates, snapshot) = await Task.Run(() =>
+            {
+                var found = _certificateService.GetAllCertificates();
+                return (found, CertificateService.GetReaderSnapshot());
+            });
+            if (IsDisposed || Disposing)
+            {
+                foreach (var certificate in certificates) certificate.Dispose();
+                return;
+            }
+            _readerSnapshot = snapshot;
+            ApplyCertificates(certificates);
         }
-        catch (CryptographicException)
+        catch (Exception ex)
         {
-            certificates = [];
+            if (!IsDisposed && !Disposing)
+            {
+                ApplyCertificates([]);
+                _status.Text = $"No se pudieron leer los certificados: {ex.Message}";
+            }
         }
+        finally
+        {
+            _loading = false;
+            if (!IsDisposed && !Disposing)
+            {
+                _refresh.Enabled = !_signing;
+                UpdateSignButton();
+            }
+        }
+    }
 
-        if (_items.Select(item => item.Certificate.Thumbprint)
-            .SequenceEqual(certificates.Select(cert => cert.Thumbprint)))
+    private async void RefreshIfCardChanged()
+    {
+        if (_loading || _signing || _checkingPresence || IsDisposed || Disposing) return;
+        _checkingPresence = true;
+        try
+        {
+            string snapshot = await Task.Run(CertificateService.GetReaderSnapshot);
+            if (!IsDisposed && !Disposing && !_signing && !_loading && snapshot != _readerSnapshot)
+                LoadCertificates();
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed && !Disposing && !_signing) _status.Text = ex.Message;
+        }
+        finally { _checkingPresence = false; }
+    }
+
+    private void ApplyCertificates(List<X509Certificate2> certificates)
+    {
+        _status.Text = certificates.Count == 0
+            ? _certificateService.LastDetectionDiagnostic ?? "No se encontró un certificado. Inserte el DNIe y pulse Actualizar certificados."
+            : $"{_documents.Count} documentos listos para firmar.";
+
+        if (_items.Select(item => CertificateIdentity(item.Certificate))
+            .SequenceEqual(certificates.Select(CertificateIdentity)))
         {
             foreach (var certificate in certificates)
                 certificate.Dispose();
-            if (_items.Count == 0 && !_signing)
-                _status.Text = "Windows no expone un certificado RSA con clave privada. Verifique el middleware, lector y DNIe.";
             return;
         }
 
@@ -174,8 +228,6 @@ public class CertificateForm : Form
 
             int selectedIndex = _items.FindIndex(item => item.Certificate.Thumbprint == selected);
             _certificates.SelectedIndex = selectedIndex >= 0 ? selectedIndex : (_items.Count > 0 ? 0 : -1);
-            if (_items.Count == 0 && !_signing)
-                _status.Text = "Windows no expone un certificado RSA con clave privada. Verifique el middleware, lector y DNIe.";
             UpdateSignButton();
         }
         finally
@@ -200,21 +252,20 @@ public class CertificateForm : Form
     }
 
     private void UpdateSignButton() =>
-        _sign.Enabled = !_signing && _documents.Count > 0 && _certificates.SelectedItem is CertificateItem;
+        _sign.Enabled = !_signing && !_loading && _documents.Count > 0 && _certificates.SelectedItem is CertificateItem;
+
+    private static (string Thumbprint, string Reader) CertificateIdentity(X509Certificate2 certificate)
+    {
+        DniePcscCertificateService.TryGetReader(certificate, out string reader);
+        return (certificate.Thumbprint, reader);
+    }
 
     private async void SignDocuments(object? sender, EventArgs e)
     {
-        if (_signing || _certificates.SelectedItem is not CertificateItem item)
+        if (_signing || _loading || _certificates.SelectedItem is not CertificateItem item)
             return;
 
-        SecureString pin;
-        using (var pinForm = new BatchPinForm(_documents.Count))
-        {
-            if (pinForm.ShowDialog(this) != DialogResult.OK)
-                return;
-            pin = pinForm.CopyPin();
-        }
-
+        // Detener también durante el diálogo modal: el temporizador sigue activo en ShowDialog.
         _signing = true;
         _refreshTimer.Stop();
         _certificates.Enabled = false;
@@ -226,13 +277,14 @@ public class CertificateForm : Form
 
         try
         {
+            using var pinForm = new BatchPinForm(_documents.Count);
+            if (pinForm.ShowDialog(this) != DialogResult.OK) return;
+            using SecureString pin = pinForm.CopyPin();
             IReadOnlyList<TemporarySignatureResult> results;
-            using (pin)
-            {
-                results = await new TemporaryBatchSignatureService().SignAndUploadAsync(
-                    _documents, item.Certificate, _apiService, pin, progress, signingStatus);
-            }
+            results = await Task.Run(() => new TemporaryBatchSignatureService().SignAndUploadAsync(
+                _documents, item.Certificate, _apiService, pin, progress, signingStatus));
 
+            _signing = false;
             Hide();
             using var report = new BatchSignatureResultsForm(results);
             report.ShowDialog();

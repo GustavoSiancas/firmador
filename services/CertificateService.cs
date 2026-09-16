@@ -5,24 +5,32 @@ namespace FirmadorPades.Services;
 
 public class CertificateService
 {
+    public string? LastDetectionDiagnostic { get; private set; }
+
     public List<X509Certificate2> GetAllCertificates()
     {
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-
-        store.Open(OpenFlags.ReadOnly);
-
-        var certificates = store.Certificates
-            .Cast<X509Certificate2>()
-            // Los certificados renovados de DNIe 1.0/2.0 pueden no incluir
-            // "FIR" en el Subject. Windows informa la disponibilidad real de
-            // la clave mediante el CSP/KSP del middleware instalado.
-            .Where(HasUsableRsaPrivateKey)
-            .Where(cert => !IsLocalDevelopmentCertificate(cert))
-            .ToList();
+        // La detección directa no depende de que los otros middleware funcionen.
+        var certificates = DniePcscCertificateService.GetCertificates(out string? diagnostic);
+        LastDetectionDiagnostic = diagnostic;
+        try
+        {
+            using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly);
+            foreach (var certificate in store.Certificates)
+            {
+                // Listar metadatos y clave pública sin abrir claves privadas ni pedir PIN.
+                if (!IsLocalDevelopmentCertificate(certificate) && HasRsaPrivateKeyReference(certificate))
+                    certificates.Add(certificate);
+                else certificate.Dispose();
+            }
+        }
+        catch (CryptographicException ex) { LastDetectionDiagnostic ??= ex.Message; }
 
         certificates.AddRange(Pkcs11SigningSession.GetTokenCertificates());
-        certificates.AddRange(CspSmartCardCertificateService.GetCertificates());
+        try { certificates.AddRange(CspSmartCardCertificateService.GetCertificates()); }
+        catch (CryptographicException ex) { LastDetectionDiagnostic ??= ex.Message; }
 
+        // PC/SC se agregó primero: conservar su procedencia si Windows tiene una copia.
         var uniqueCertificates = new List<X509Certificate2>();
         foreach (var group in certificates.GroupBy(cert => Convert.ToHexString(cert.RawData), StringComparer.Ordinal))
         {
@@ -41,22 +49,16 @@ public class CertificateService
     {
         var certificates = GetAllCertificates();
 
-        foreach (var cert in certificates)
-        {
-            try
-            {
-                using var rsa = cert.GetRSAPrivateKey();
+        if (certificates.Count == 0) throw new CryptographicException("No se encontró un certificado de firma.");
+        foreach (var certificate in certificates.Skip(1)) certificate.Dispose();
+        // Puede ser un certificado público PC/SC: usar SigningSession para firmar.
+        return certificates[0];
+    }
 
-                if (rsa != null)
-                    return cert;
-            }
-            catch
-            {
-                // Ignorar certificados inválidos
-            }
-        }
-
-        throw new Exception("No se encontró un certificado de firma.");
+    internal static string GetReaderSnapshot()
+    {
+        try { return DniePcscConnection.GetReaderSnapshot(); }
+        catch (CryptographicException ex) { return ex.Message; }
     }
 
     public string GetHolderName(X509Certificate2 cert)
@@ -78,14 +80,14 @@ public class CertificateService
     public string GetCertificatePurpose(X509Certificate2 cert) =>
         IsExplicitSigningCertificate(cert) ? "Certificado de firma" : "Certificado RSA";
 
-    private static bool HasUsableRsaPrivateKey(X509Certificate2 cert)
+    private static bool HasRsaPrivateKeyReference(X509Certificate2 cert)
     {
         if (!cert.HasPrivateKey)
             return false;
 
         try
         {
-            using RSA? rsa = cert.GetRSAPrivateKey();
+            using RSA? rsa = cert.GetRSAPublicKey();
             return rsa is not null;
         }
         catch (CryptographicException)

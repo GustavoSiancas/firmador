@@ -4,8 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace FirmadorPades.Services;
 
-// DNIe CJCOP3 se publica mediante el CSP clÃ¡sico de Microsoft, no necesariamente
-// en CurrentUser\\My ni mediante el PKCS#11 de IDEMIA.
+// Respaldo para tarjetas publicadas por CSP. El DNIe 2.0 tiene su propia vía PC/SC.
 internal static class CspSmartCardCertificateService
 {
     private const uint ProvRsaFull = 1;
@@ -15,7 +14,7 @@ internal static class CspSmartCardCertificateService
     private const uint AtKeyExchange = 1;
     private const uint AtSignature = 2;
     private const uint KpCertificate = 26;
-    private const uint CrtUseExistingKey = 8;
+    private const uint CryptSilent = 0x40;
     private const string Provider = "Microsoft Base Smart Card Crypto Provider";
 
     internal static List<X509Certificate2> GetCertificates()
@@ -29,7 +28,7 @@ internal static class CspSmartCardCertificateService
             "FIR_ECEP-Sig", "FIR_ECEP-Sign", "FIRMA", "SIGNATURE"
         };
 
-        if (CryptAcquireContext(out var enumerationProvider, null, Provider, ProvRsaFull, CryptVerifyContext))
+        if (CryptAcquireContext(out var enumerationProvider, null, Provider, ProvRsaFull, CryptVerifyContext | CryptSilent))
         {
             try { foreach (string container in GetContainers(enumerationProvider)) containers.Add(container); }
             finally { CryptReleaseContext(enumerationProvider, 0); }
@@ -37,7 +36,7 @@ internal static class CspSmartCardCertificateService
 
         foreach (string container in containers)
         {
-            if (!CryptAcquireContext(out var provider, container, Provider, ProvRsaFull, 0))
+            if (!CryptAcquireContext(out var provider, container, Provider, ProvRsaFull, CryptSilent))
                 continue;
 
             try
@@ -55,13 +54,18 @@ internal static class CspSmartCardCertificateService
                         var certificate = new X509Certificate2(rawCertificate);
                         try
                         {
-                            var parameters = new CspParameters((int)ProvRsaFull, Provider, container)
+                            // Asociar la referencia sin abrir la clave privada.
+                            // Windows podrá solicitar autorización únicamente al firmar.
+                            var parameters = new KeyProviderInfo
                             {
-                                KeyNumber = (int)keyNumber,
-                                Flags = CspProviderFlags.UseExistingKey
+                                Container = container,
+                                ProviderName = Provider,
+                                ProviderType = ProvRsaFull,
+                                KeySpec = keyNumber
                             };
-                            using var rsa = new RSACryptoServiceProvider(parameters);
-                            certificates.Add(certificate.CopyWithPrivateKey(rsa));
+                            if (!CertSetCertificateContextProperty(certificate.Handle, 2, 0, ref parameters))
+                                throw new CryptographicException(Marshal.GetLastWin32Error());
+                            certificates.Add(certificate);
                         }
                         catch (CryptographicException)
                         {
@@ -119,4 +123,20 @@ internal static class CspSmartCardCertificateService
     private static extern bool CryptGetKeyParam(IntPtr key, uint parameter, byte[]? data, ref uint dataLength, uint flags);
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool CryptDestroyKey(IntPtr key);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct KeyProviderInfo
+    {
+        [MarshalAs(UnmanagedType.LPWStr)] public string Container;
+        [MarshalAs(UnmanagedType.LPWStr)] public string ProviderName;
+        public uint ProviderType;
+        public uint Flags;
+        public uint ParameterCount;
+        public IntPtr Parameters;
+        public uint KeySpec;
+    }
+
+    [DllImport("crypt32.dll", SetLastError = true)]
+    private static extern bool CertSetCertificateContextProperty(IntPtr certificate, uint property,
+        uint flags, ref KeyProviderInfo information);
 }

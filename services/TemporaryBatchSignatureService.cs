@@ -22,22 +22,14 @@ public sealed class TemporaryBatchSignatureService
         var signer = new PdfSignatureService();
         byte[] stamp = new StampService().CreateStamp(certificate.Subject, reason);
 
-        using var session = Pkcs11Fallback.OpenOrUseWindows(
-            () => new Pkcs11SigningSession(certificate, pin),
-            () =>
-            {
-                pin.Dispose();
-                status?.Report("DNIe no compatible con PKCS#11. Windows solicitará confirmación por cada documento.");
-            });
+        using var session = SigningSession.Open(certificate, pin, message => status?.Report(message));
 
         for (int index = 0; index < documents.Count; index++)
         {
             TemporarySigningDocument document = documents[index];
             try
             {
-                byte[] signedPdf = session is null
-                    ? signer.Sign(document.PdfBytes, reason, certificate, stamp, document.SignatureLocation)
-                    : signer.Sign(document.PdfBytes, reason, certificate, stamp, document.SignatureLocation, session);
+                byte[] signedPdf = signer.Sign(document.PdfBytes, reason, certificate, stamp, document.SignatureLocation, session);
 
                 await apiService.UpdateDocumentAsync(document.Id, signedPdf);
                 results.Add(new TemporarySignatureResult(document.FileName, null));
@@ -47,7 +39,8 @@ public sealed class TemporaryBatchSignatureService
                 results.Add(new TemporarySignatureResult(document.FileName, ex.Message));
 
                 // No reintentar un PIN inválido: puede bloquear el DNIe.
-                if (ex is CryptographicException)
+                // iText puede envolver el error original en PdfException.
+                if (session.HasFailed || ex is CryptographicException)
                 {
                     foreach (TemporarySigningDocument pending in documents.Skip(index + 1))
                     {
