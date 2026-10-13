@@ -1,5 +1,5 @@
 #define MyAppName "Firmador CAL"
-#define MyAppVersion "1.11"
+#define MyAppVersion "1.12"
 #define MyAppExeName "FirmadorPades.exe"
 
 [Setup]
@@ -16,7 +16,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ChangesAssociations=yes
 DisableProgramGroupPage=yes
 OutputDir=bin\installer
-OutputBaseFilename=FirmadorCALSetup
+OutputBaseFilename=FirmadorCALSetup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

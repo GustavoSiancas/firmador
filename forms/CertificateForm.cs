@@ -34,7 +34,7 @@ public class CertificateForm : Form
         _apiService = apiService;
         _documents = documents;
 
-        Text = "Firmador CAL - Versión 1.11";
+        Text = "Firmador CAL - Versión 1.12";
         Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "logo.ico"));
         ClientSize = new Size(560, 390);
         BackColor = Surface;
