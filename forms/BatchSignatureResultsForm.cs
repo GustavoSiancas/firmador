@@ -1,4 +1,4 @@
-using FirmadorPades.Services;
+﻿using FirmadorPades.Services;
 
 namespace FirmadorPades.Forms;
 
@@ -7,7 +7,7 @@ public sealed class BatchSignatureResultsForm : Form
     private static readonly Color BrandTeal = Color.FromArgb(20, 125, 106);
     private static readonly Color Surface = Color.FromArgb(244, 247, 251);
 
-    public BatchSignatureResultsForm(IReadOnlyList<TemporarySignatureResult> results)
+    public BatchSignatureResultsForm(IReadOnlyList<TemporarySignatureResult> results, string? zipPath = null)
     {
         Text = "Resultados de firma masiva";
         ClientSize = new Size(820, 460);
@@ -20,8 +20,10 @@ public sealed class BatchSignatureResultsForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.Controls.Add(new Label
         {
-            Text = $"{successful.Length} firmados y actualizados en la nube; {results.Count - successful.Length} no actualizados.",
-            AutoSize = true, ForeColor = Color.FromArgb(84, 97, 110),
+            Text = zipPath is not null
+                ? $"{successful.Length} PDF guardados en {zipPath}; {results.Count - successful.Length} no firmados."
+                : $"{successful.Length} firmados y actualizados en la nube; {results.Count - successful.Length} no actualizados.",
+            AutoSize = true, MaximumSize = new Size(760, 0), ForeColor = Color.FromArgb(84, 97, 110),
             Padding = new Padding(4, 0, 0, 10)
         }, 0, 0);
         var list = new ListView
@@ -35,7 +37,7 @@ public sealed class BatchSignatureResultsForm : Form
             list.Items.Add(new ListViewItem(new[]
             {
                 result.FileName,
-                result.Error ?? "Firmado y actualizado en la nube"
+                result.Error ?? (zipPath is null ? "Firmado y actualizado en la nube" : "Firmado e incluido en el ZIP")
             }));
         layout.Controls.Add(list, 0, 1);
         Controls.Add(layout);

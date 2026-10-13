@@ -1,4 +1,4 @@
-using System.Web;
+﻿using System.Web;
 using FirmadorPades.Models;
 
 namespace FirmadorPades.Services;
@@ -7,11 +7,6 @@ public class LaunchService
 {
     public LaunchParameters GetLaunchParameters(string[] args)
     {
-#if DEBUG
-        if (args.Length == 0)
-            return GetDevelopmentParameters();
-#endif
-
         if (args.Length != 1)
             throw new LaunchParameterException("Esta aplicación solo puede iniciarse desde el sistema web.");
 
@@ -31,15 +26,6 @@ public class LaunchService
             Token = token
         };
     }
-
-#if DEBUG
-    private static LaunchParameters GetDevelopmentParameters() => new()
-    {
-        SessionEndpoint = new Uri("http://127.0.0.1:8080/api/documents"),
-        Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYwLCJ0eXBlIjoiZXh0ZXJuYWwiLCJpYXQiOjE3ODk0MDAxNTMsImV4cCI6MTc5MDAwNDk1M30.wjXoicMeJ5oc5VZnZuUxxDm6UbBEltXfjCD7uB6DKZs",
-        IsDevelopment = true
-    };
-#endif
 
     private static Uri GetEndpoint(string? value, string parameterName)
     {

@@ -1,4 +1,4 @@
-using System.Windows.Forms;
+﻿using System.Windows.Forms;
 using FirmadorPades.Forms;
 using FirmadorPades.Models;
 using FirmadorPades.Services;
@@ -14,6 +14,12 @@ internal static class Program
 
         try
         {
+            if (args.Length == 0)
+            {
+                Application.Run(new LocalSigningForm(new CertificateService()));
+                return;
+            }
+
             var launchService = new LaunchService();
 
             LaunchParameters parameters =

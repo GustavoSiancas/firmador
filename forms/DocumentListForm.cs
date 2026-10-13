@@ -1,4 +1,4 @@
-using FirmadorPades.Models;
+﻿using FirmadorPades.Models;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -157,7 +157,7 @@ internal sealed class DocumentListForm : Form
 
         _status.Visible = true;
         _status.Text = "Cargando documento…";
-        _core.Navigate($"{DocumentUrl}?id={Uri.EscapeDataString(_selectedDocument.Id)}");
+        _core.Navigate($"{DocumentUrl}?id={Uri.EscapeDataString(_selectedDocument.Id)}#page={_selectedDocument.SignatureLocation.Page}");
     }
 
     private void ServeSelectedDocument(object? sender, CoreWebView2WebResourceRequestedEventArgs args)

@@ -1,10 +1,43 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using FirmadorPades.Models;
 using FirmadorPades.Services;
 using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
+
+if (args.Length == 2 && args[0] == "--render-local-ui")
+{
+    Exception? renderError = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            System.Windows.Forms.Application.EnableVisualStyles();
+            Directory.CreateDirectory(args[1]);
+            using var form = new FirmadorPades.Forms.LocalSigningForm(new CertificateService(), detectCertificates: false);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            form.PerformLayout();
+            using var bitmap = new System.Drawing.Bitmap(form.Width, form.Height);
+            form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, form.Width, form.Height));
+            bitmap.Save(Path.Combine(args[1], "local-signing.png"));
+            using var placementForm = new FirmadorPades.Forms.SignaturePlacementForm(new LocalSignaturePlacement());
+            placementForm.Show();
+            System.Windows.Forms.Application.DoEvents();
+            placementForm.PerformLayout();
+            using var grid = new System.Drawing.Bitmap(placementForm.Width, placementForm.Height);
+            placementForm.DrawToBitmap(grid, new System.Drawing.Rectangle(0, 0, placementForm.Width, placementForm.Height));
+            grid.Save(Path.Combine(args[1], "signature-placement.png"));
+        }
+        catch (Exception ex) { renderError = ex; }
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+    if (renderError is not null) throw renderError;
+    return;
+}
 
 if (args.Length == 2 && args[0] == "--audit-cms")
 {
@@ -176,6 +209,72 @@ using X509Certificate2 certificate = request.CreateSelfSigned(
     DateTimeOffset.UtcNow.AddDays(1));
 
 byte[] currentPdf = CreatePdf();
+
+// El modo independiente entrega ambos PDF, aunque compartan nombre, con firmas v?lidas.
+string localTestDirectory = Path.Combine(Path.GetTempPath(), "FirmadorLocalTest-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(localTestDirectory);
+try
+{
+    string source = Path.Combine(localTestDirectory, "documento.pdf");
+    File.WriteAllBytes(source, currentPdf);
+    var localDocuments = LocalBatchSignatureService.LoadDocuments(new[] { source, source });
+    for (int row = 0; row < 4; row++)
+    for (int col = 0; col < 3; col++)
+    foreach (bool firstPage in new[] { true, false })
+    {
+        var positioned = LocalBatchSignatureService.Reposition(localDocuments, new LocalSignaturePlacement(col, row, firstPage));
+        using var input = new MemoryStream(currentPdf);
+        using var pdf = new PdfDocument(new PdfReader(input));
+        var location = positioned[0].SignatureLocation;
+        int expectedPage = firstPage ? 1 : pdf.GetNumberOfPages();
+        var size = pdf.GetPage(expectedPage).GetPageSize();
+        if (location.Page != expectedPage || location.X < size.GetLeft() || location.Y < size.GetBottom() ||
+            location.X + location.Width > size.GetRight() || location.Y + location.Height > size.GetTop())
+            throw new Exception("La matriz ubic? la firma fuera de la p?gina seleccionada.");
+        if (!positioned[0].PdfBytes.SequenceEqual(currentPdf))
+            throw new Exception("La vista previa alter? el PDF original.");
+    }
+
+    string archivePath = Path.Combine(localTestDirectory, "firmados.zip");
+    using var localPin = new System.Security.SecureString();
+    var localResults = await new LocalBatchSignatureService().SignToZipAsync(
+        localDocuments, certificate, localPin, archivePath);
+    if (localResults.Count != 2 || localResults.Any(result => result.Error is not null))
+        throw new Exception("Fall? la firma del lote local.");
+    using var archive = System.IO.Compression.ZipFile.OpenRead(archivePath);
+    if (archive.Entries.Count != 2 || archive.Entries.Select(entry => entry.FullName).Distinct().Count() != 2)
+        throw new Exception("El ZIP perdi? documentos con nombres repetidos.");
+    foreach (var entry in archive.Entries)
+    {
+        using var content = entry.Open();
+        using var bytes = new MemoryStream();
+        content.CopyTo(bytes);
+        var signatures = new PdfValidationService().GetSignatures(bytes.ToArray());
+        if (signatures.Count != 1 || !signatures[0].IsValid)
+            throw new Exception("El ZIP contiene un PDF sin una firma v?lida.");
+    }
+    string failedArchivePath = Path.Combine(localTestDirectory, "fallidos.zip");
+    var failedResults = await new LocalBatchSignatureService().SignToZipAsync(
+        new[] { new TemporarySigningDocument { FileName = "invalido.pdf", PdfBytes = new byte[] { 1, 2, 3 } } },
+        certificate, localPin, failedArchivePath);
+    using (var failedArchive = System.IO.Compression.ZipFile.OpenRead(failedArchivePath))
+    {
+        var errorEntry = failedArchive.GetEntry("errores.txt")
+            ?? throw new Exception("El lote fallido no gener? el reporte dentro del ZIP.");
+        using var errorReader = new StreamReader(errorEntry.Open());
+        string errorReport = errorReader.ReadToEnd();
+        if (failedResults.Single().Error is null || !errorReport.Contains("invalido.pdf") ||
+            !errorReport.Contains(failedResults.Single().Error!))
+            throw new Exception("El reporte no identifica el PDF fallido y su motivo.");
+    }
+    Console.WriteLine("OK: lote local a ZIP con nombres repetidos y firmas v?lidas.");
+}
+finally
+{
+    foreach (string file in Directory.GetFiles(localTestDirectory)) File.Delete(file);
+    Directory.Delete(localTestDirectory);
+}
+
 byte[] stamp = Convert.FromBase64String(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8N8AAAAASUVORK5CYII=");
 var placement = new SignatureLocation { Page = 1, X = 50, Y = 650, Width = 170, Height = 60 };
@@ -296,6 +395,26 @@ static void AssertPreservedRevision(byte[] before, byte[] after)
     if (previousCatalog.GetAsDictionary(PdfName.Extensions)?.ToString() != currentCatalog.GetAsDictionary(PdfName.Extensions)?.ToString())
         throw new Exception("Se cambiaron las extensiones de un PDF firmado.");
 }
+
+foreach (var pinError in new[] {
+    (Net.Pkcs11Interop.Common.CKR.CKR_PIN_INCORRECT, "incorrecta"),
+    (Net.Pkcs11Interop.Common.CKR.CKR_PIN_LOCKED, "bloqueada"),
+    (Net.Pkcs11Interop.Common.CKR.CKR_PIN_EXPIRED, "vencido"),
+    (Net.Pkcs11Interop.Common.CKR.CKR_CANCEL, "cancel") })
+{
+    var wrapped = new iText.Kernel.Exceptions.PdfException("Failed to sign",
+        new CryptographicException("Provider error",
+            new Net.Pkcs11Interop.Common.Pkcs11Exception("C_Login", pinError.Item1)));
+    string message = SigningErrorMessages.GetMessage(wrapped);
+    if (!message.Contains(pinError.Item2, StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("CKR") || message.Contains("Failed"))
+        throw new Exception("No se tradujo la causa del error de PIN.");
+}
+var windowsPinError = new CryptographicException(unchecked((int)0x8010006B));
+if (!SigningErrorMessages.GetMessage(new Exception("Failed to sign", windowsPinError)).Contains("incorrecta"))
+    throw new Exception("No se tradujo el error de PIN de Windows.");
+if (SigningErrorMessages.GetMessage(new InvalidDataException("PDF inv?lido")).Contains("PIN"))
+    throw new Exception("Se confundi? un PDF inv?lido con un error de PIN.");
 
 bool fallbackReported = false;
 object? fallbackSession = Pkcs11Fallback.OpenOrUseWindows<object>(

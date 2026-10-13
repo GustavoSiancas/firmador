@@ -292,7 +292,7 @@ public class CertificateForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Error al firmar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, SigningErrorMessages.GetMessage(ex), "Error al firmar", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
